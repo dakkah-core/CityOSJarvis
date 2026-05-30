@@ -1,0 +1,71 @@
+# CityOSJarvis integrated into CityOS monorepo network
+# Usage:
+#   cd C:\Dakkah-CityOS\dakkah-cityos-cms
+#   docker compose -f docker-compose.yml -f ../CityOSJarvis/deploy/docker/docker-compose.integrated.yml up -d
+#
+# This attaches CityOSJarvis to the existing cityos network used by the monorepo.
+
+version: "3.8"
+
+services:
+  cityosjarvis:
+    image: ghcr.io/dakkah/cityosjarvis:latest
+    container_name: cityosjarvis
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENJARVIS_API_KEY=${OPENJARVIS_API_KEY:-cityos-local-key}
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8080}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-cityos}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-cityosjarvis}
+      - DATABASE_URL=${CITYOSJARVIS_DATABASE_URL:-postgresql://jarvis:jarvis@postgres:5432/jarvis}
+      - REDIS_URL=${CITYOS_REDIS_URL:-redis://redis:6379/0}
+      - CITYOS_AUDIT_DIR=/var/log/cityosjarvis
+      - CITYOS_LOG_LEVEL=${CITYOS_LOG_LEVEL:-INFO}
+      - ENABLE_TTS=${ENABLE_TTS:-false}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
+      - LOKI_URL=${LOKI_URL:-http://loki:3100}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+    volumes:
+      - cityosjarvis-audit:/var/log/cityosjarvis
+    networks:
+      - cityos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      cityos.group: "ai"
+      cityos.layer: "app"
+      cityos.service: "cityosjarvis"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cityosjarvis-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - cityos
+    profiles:
+      - ai-local
+      - all
+
+volumes:
+  cityosjarvis-audit:
+  ollama-models:
+
+networks:
+  cityos:
+    external: true

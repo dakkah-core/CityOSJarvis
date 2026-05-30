@@ -1,54 +1,71 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# CityOS Jarvis Desktop Build Script
-# Usage: ./scripts/build-desktop.sh [platform]
-# Platforms: windows, macos, linux, all
+# CityOSJarvis Desktop Build Script
+# Cross-platform Tauri v2 builds
 
-PLATFORM="${1:-all}"
-APP_DIR="apps/cityos-jarvis-desktop"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DESKTOP_DIR="$ROOT_DIR/apps/cityos-jarvis-desktop"
 
-echo "=== CityOS Jarvis Desktop Build ==="
-echo "Platform: $PLATFORM"
+echo "=== CityOSJarvis Desktop Build ==="
+echo "Root: $ROOT_DIR"
+echo "Desktop: $DESKTOP_DIR"
 
-# Verify prerequisites
-if ! command -v pnpm &> /dev/null; then
-    echo "Error: pnpm not found"
+# Detect platform
+OS=$(uname -s)
+ARCH=$(uname -m)
+echo "Platform: $OS / $ARCH"
+
+# Check prerequisites
+check_cmd() {
+  if ! command -v "$1" &> /dev/null; then
+    echo "ERROR: $1 is not installed"
     exit 1
-fi
+  fi
+}
 
-if ! command -v cargo &> /dev/null; then
-    echo "Error: Rust/Cargo not found"
-    exit 1
-fi
+check_cmd node
+check_cmd pnpm
+check_cmd cargo
+
+cd "$DESKTOP_DIR"
+
+# Install dependencies
+echo "=== Installing dependencies ==="
+pnpm install
 
 # Build frontend
-echo "Building frontend..."
-cd "$APP_DIR"
-pnpm install
+echo "=== Building frontend ==="
 pnpm build
 
 # Build Tauri
-echo "Building Tauri app..."
-case "$PLATFORM" in
-    windows)
-        pnpm tauri build --target x86_64-pc-windows-msvc
-        ;;
-    macos)
-        pnpm tauri build --target universal-apple-darwin
-        ;;
-    linux)
-        pnpm tauri build --target x86_64-unknown-linux-gnu
-        ;;
-    all)
-        pnpm tauri build
-        ;;
-    *)
-        echo "Unknown platform: $PLATFORM"
-        echo "Usage: $0 [windows|macos|linux|all]"
-        exit 1
-        ;;
-esac
+echo "=== Building Tauri app ==="
+if [ "$OS" = "Darwin" ]; then
+  # macOS
+  if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+    echo "Signing with identity: $APPLE_SIGNING_IDENTITY"
+    export TAURI_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY"
+  fi
+  pnpm tauri build --target universal-apple-darwin
+elif [ "$OS" = "Linux" ]; then
+  # Linux
+  pnpm tauri build
+else
+  echo "ERROR: Unsupported platform: $OS"
+  exit 1
+fi
 
-echo "=== Build Complete ==="
-echo "Artifacts in: $APP_DIR/src-tauri/target/release/bundle/"
+# Report outputs
+echo ""
+echo "=== Build outputs ==="
+find "$DESKTOP_DIR/src-tauri/target" -type f \( \
+  -name "*.dmg" -o \
+  -name "*.app" -o \
+  -name "*.AppImage" -o \
+  -name "*.deb" -o \
+  -name "*.rpm" \
+) -print 2>/dev/null || true
+
+echo ""
+echo "=== Build complete ==="

@@ -1,47 +1,51 @@
-# CityOS Jarvis Desktop Build Script (Windows)
-# Usage: .\scripts\build-desktop.ps1 [platform]
-# Platforms: windows, all
+# CityOSJarvis Desktop Build Script (Windows)
+# Tauri v2 MSI build
 
-param(
-    [string]$Platform = "windows"
-)
+$ErrorActionPreference = "Stop"
 
-$APP_DIR = "apps/cityos-jarvis-desktop"
+$RootDir = Resolve-Path "$PSScriptRoot\.."
+$DesktopDir = Join-Path $RootDir "apps\cityos-jarvis-desktop"
 
-Write-Host "=== CityOS Jarvis Desktop Build ===" -ForegroundColor Cyan
-Write-Host "Platform: $Platform"
+Write-Host "=== CityOSJarvis Desktop Build ===" -ForegroundColor Cyan
+Write-Host "Root: $RootDir"
+Write-Host "Desktop: $DesktopDir"
 
-# Verify prerequisites
-if (!(Get-Command pnpm -ErrorAction SilentlyContinue)) {
-    Write-Error "pnpm not found"
-    exit 1
+# Check prerequisites
+function Test-Command {
+  param([string]$Name)
+  if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+    throw "ERROR: $Name is not installed"
+  }
 }
 
-if (!(Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Write-Error "Rust/Cargo not found"
-    exit 1
+Test-Command "node"
+Test-Command "pnpm"
+Test-Command "cargo"
+
+Push-Location $DesktopDir
+
+try {
+  Write-Host "=== Installing dependencies ===" -ForegroundColor Green
+  pnpm install
+
+  Write-Host "=== Building frontend ===" -ForegroundColor Green
+  pnpm build
+
+  Write-Host "=== Building Tauri MSI ===" -ForegroundColor Green
+  pnpm tauri build
+
+  # Report outputs
+  Write-Host ""
+  Write-Host "=== Build outputs ===" -ForegroundColor Cyan
+  $OutputDir = Join-Path $DesktopDir "src-tauri\target\release\bundle"
+  if (Test-Path $OutputDir) {
+    Get-ChildItem -Path $OutputDir -Recurse -Include *.msi, *.exe | ForEach-Object {
+      Write-Host "  $($_.FullName)" -ForegroundColor Yellow
+    }
+  }
+} finally {
+  Pop-Location
 }
 
-# Build frontend
-Write-Host "Building frontend..." -ForegroundColor Green
-Set-Location $APP_DIR
-pnpm install
-pnpm build
-
-# Build Tauri
-Write-Host "Building Tauri app..." -ForegroundColor Green
-switch ($Platform) {
-    "windows" {
-        pnpm tauri build --target x86_64-pc-windows-msvc
-    }
-    "all" {
-        pnpm tauri build
-    }
-    default {
-        Write-Error "Unknown platform: $Platform"
-        exit 1
-    }
-}
-
-Write-Host "=== Build Complete ===" -ForegroundColor Green
-Write-Host "Artifacts in: $APP_DIR/src-tauri/target/release/bundle/"
+Write-Host ""
+Write-Host "=== Build complete ===" -ForegroundColor Green

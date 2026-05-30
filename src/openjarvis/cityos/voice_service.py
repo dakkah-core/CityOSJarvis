@@ -4,6 +4,7 @@ This module runs inside CityOSJarvis and handles:
 - Intent-to-query translation (structured voice intents → natural language)
 - Agent routing via the existing OpenJarvis orchestrator
 - SSML + plain text response generation
+- Optional TTS (Cartesia) when ENABLE_TTS=true
 - STT endpoint (faster-whisper) for direct audio ingestion
 - Compliance gating and audit logging
 
@@ -43,6 +44,11 @@ router = APIRouter(prefix="/v1/voice", tags=["voice"])
 # Lazy-loaded STT model
 _stt_model: Any | None = None
 
+# Lazy-loaded TTS backend
+_tts_backend: Any | None = None
+
+ENABLE_TTS = os.environ.get("ENABLE_TTS", "false").lower() in ("true", "1", "yes")
+
 
 def _get_stt_model() -> Any:
     """Lazy-load faster-whisper model."""
@@ -67,6 +73,20 @@ def _get_stt_model() -> Any:
             )
             raise
     return _stt_model
+
+
+def _get_tts_backend() -> Any:
+    """Lazy-load TTS backend (Cartesia)."""
+    global _tts_backend
+    if _tts_backend is None and ENABLE_TTS:
+        try:
+            from openjarvis.speech.cartesia_tts import CartesiaTTSBackend
+            _tts_backend = CartesiaTTSBackend()
+            logger.info("Loaded Cartesia TTS backend")
+        except Exception as e:
+            logger.error("Failed to load TTS backend: %s", e)
+            _tts_backend = None
+    return _tts_backend
 
 
 def _build_ssml(text: str, pause_ms: int = 400) -> str:
@@ -189,12 +209,36 @@ def _run_agent_sync(
     }
 
 
+def _synthesize_if_enabled(text: str, lang: str) -> dict[str, str] | None:
+    """Synthesize audio if TTS is enabled. Returns audio metadata or None."""
+    if not ENABLE_TTS:
+        return None
+    backend = _get_tts_backend()
+    if backend is None:
+        return None
+    try:
+        result = backend.synthesize(
+            text,
+            language=lang,
+            output_format="mp3",
+        )
+        audio_b64 = base64.b64encode(result.audio).decode("utf-8")
+        return {
+            "audioBase64": audio_b64,
+            "audioFormat": result.format,
+            "voiceId": result.voice_id,
+        }
+    except Exception as e:
+        logger.warning("TTS synthesis failed: %s", e)
+        return None
+
+
 @router.post("/process-intent")
 async def process_intent(
     request: Request,
     body: dict[str, Any],
 ) -> JSONResponse:
-    """Process a voice intent and return SSML + plain text."""
+    """Process a voice intent and return SSML + plain text + optional audio."""
     tenant = get_tenant_context(request)
     audit = CityOSAuditLogger()
     gate = ComplianceGate()
@@ -202,6 +246,7 @@ async def process_intent(
     intent = body.get("intent", "")
     params = body.get("parameters", {})
     session_id = body.get("sessionId", "")
+    generate_audio = body.get("generateAudio", False)
 
     start_time = time.perf_counter()
 
@@ -227,14 +272,17 @@ async def process_intent(
             classification.reason
             or "Request blocked for privacy. Please contact your service center."
         )
-        return JSONResponse(
-            {
-                "ssml": _build_ssml(safe_msg),
-                "plainText": safe_msg,
-                "shouldEndSession": True,
-                "suggestions": [],
-            }
-        )
+        response_payload: dict[str, Any] = {
+            "ssml": _build_ssml(safe_msg),
+            "plainText": safe_msg,
+            "shouldEndSession": True,
+            "suggestions": [],
+        }
+        if generate_audio and ENABLE_TTS:
+            audio_meta = _synthesize_if_enabled(safe_msg, _detect_language(safe_msg))
+            if audio_meta:
+                response_payload.update(audio_meta)
+        return JSONResponse(response_payload)
 
     # Route to agent
     try:
@@ -267,15 +315,26 @@ async def process_intent(
             latency_ms=latency_ms,
         )
 
-        return JSONResponse(
-            {
-                "ssml": ssml,
-                "plainText": response_text,
-                "shouldEndSession": _should_end_session(intent),
-                "suggestions": _generate_suggestions(intent, response_text),
-                "language": lang,
-            }
-        )
+        response_payload = {
+            "ssml": ssml,
+            "plainText": response_text,
+            "shouldEndSession": _should_end_session(intent),
+            "suggestions": _generate_suggestions(intent, response_text),
+            "language": lang,
+        }
+
+        if generate_audio and ENABLE_TTS:
+            audio_meta = _synthesize_if_enabled(response_text, lang)
+            if audio_meta:
+                response_payload.update(audio_meta)
+                audit.log(
+                    event="voice.tts.generated",
+                    tenant=tenant,
+                    request={"text_length": len(response_text), "language": lang},
+                    response={"format": audio_meta.get("audioFormat")},
+                )
+
+        return JSONResponse(response_payload)
 
     except HTTPException:
         raise
@@ -292,6 +351,54 @@ async def process_intent(
         raise HTTPException(
             status_code=500, detail="Voice processing failed"
         ) from e
+
+
+@router.post("/speak")
+async def speak(
+    request: Request,
+    body: dict[str, Any],
+) -> JSONResponse:
+    """Direct TTS endpoint — synthesize text to speech audio.
+
+    Request body:
+        text: str          -- text to synthesize
+        language: str      -- "en" or "ar" (optional, auto-detected)
+        voiceId: str       -- Cartesia voice ID (optional)
+        outputFormat: str  -- "mp3" or "pcm_f32le" (default: mp3)
+    """
+    if not ENABLE_TTS:
+        raise HTTPException(status_code=503, detail="TTS is not enabled. Set ENABLE_TTS=true")
+
+    text = body.get("text", "")
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing text field")
+
+    lang = body.get("language") or _detect_language(text)
+    voice_id = body.get("voiceId", "")
+    output_format = body.get("outputFormat", "mp3")
+
+    backend = _get_tts_backend()
+    if backend is None:
+        raise HTTPException(status_code=503, detail="TTS backend unavailable")
+
+    try:
+        result = backend.synthesize(
+            text,
+            language=lang,
+            voice_id=voice_id,
+            output_format=output_format,
+        )
+        audio_b64 = base64.b64encode(result.audio).decode("utf-8")
+        return JSONResponse({
+            "audioBase64": audio_b64,
+            "audioFormat": result.format,
+            "voiceId": result.voice_id,
+            "language": lang,
+            "durationEstimate": len(text.split()) * 0.4,  # rough heuristic
+        })
+    except Exception as e:
+        logger.exception("TTS synthesis failed")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}") from e
 
 
 @router.post("/process-call")

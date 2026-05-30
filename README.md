@@ -29,7 +29,131 @@ Personal AI agents are exploding in popularity, but nearly all of them still rou
 
 OpenJarvis is that stack. It is a framework for local-first personal AI, built around three core ideas: shared primitives for building on-device agents; evaluations that treat energy, FLOPs, latency, and dollar cost as first-class constraints alongside accuracy; and a learning loop that improves models using local trace data. The goal is simple: make it possible to build personal AI agents that run locally by default, calling the cloud only when truly necessary. OpenJarvis aims to be both a research platform and a production foundation for local AI, in the spirit of PyTorch.
 
-## Installation
+---
+
+## 🏙️ CityOSJarvis Fork
+
+> This is the **Dakkah CityOS** fork of OpenJarvis, hardened for multi-tenant smart city deployments with Saudi compliance requirements.
+
+### What Makes CityOSJarvis Different
+
+| Feature | Upstream OpenJarvis | CityOSJarvis |
+|---------|---------------------|--------------|
+| Multi-tenancy | Single user | Node hierarchy (Global → Country → Region → City → Zone → POI → Tenant) |
+| Auth | Local API key | Keycloak JWT (RS256) with realm roles |
+| Compliance | None | PHI/PII blocking, Saudi ID/Iqama detection, Arabic health keywords |
+| Audit | Console logs | Append-only JSON Lines with tenant isolation |
+| Voice | STT only | STT + optional Cartesia TTS (`ENABLE_TTS=true`) |
+| MCP Tools | Generic | 6 CityOS domain tools (governance, commerce, healthcare, transportation, fleet, public safety) |
+| Monitoring | None | Prometheus metrics + Grafana dashboards |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CityOS Web Platform                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Smart City  │  │  Business   │  │    City Dashboard       │  │
+│  │   Portal    │  │  Dashboard  │  │   (Government)          │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+│         │                │                      │                │
+│         └────────────────┼──────────────────────┘                │
+│                          ▼                                       │
+│              ┌─────────────────────┐                             │
+│              │   BFF Gateway       │                             │
+│              │   (/api/bff/ai/*)   │                             │
+│              │   JWT + Tenant      │                             │
+│              └──────────┬──────────┘                             │
+└─────────────────────────┼────────────────────────────────────────┘
+                          ▼
+              ┌─────────────────────┐
+              │   CityOSJarvis      │
+              │   (Python :8000)    │
+              │                     │
+              │  ┌───────────────┐  │
+              │  │ ComplianceGate│  │  ← Blocks PHI/PII before agent
+              │  └───────────────┘  │
+              │  ┌───────────────┐  │
+              │  │CityOSAuditLog │  │  ← JSON Lines audit trail
+              │  └───────────────┘  │
+              │  ┌───────────────┐  │
+              │  │ Voice Service │  │  ← STT (whisper) + TTS (cartesia)
+              │  └───────────────┘  │
+              │  ┌───────────────┐  │
+              │  │  MCP Tools    │  │  ← 6 CityOS domain tools
+              │  └───────────────┘  │
+              └─────────────────────┘
+```
+
+### Quick Start for CityOS Developers
+
+```bash
+# 1. Clone the fork
+git clone https://github.com/dakkah-core/CityOSJarvis.git
+cd CityOSJarvis
+git checkout cityos/main
+
+# 2. Install with uv (Python 3.10+)
+uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channels --extra pdf --extra security-signing
+
+# 3. Set required environment variables
+export CITYOS_KEYCLOAK_URL="http://localhost:8080/realms/cityos"
+export CARTESIA_API_KEY="your-cartesia-key"  # optional, for TTS
+export ENABLE_TTS="true"  # optional
+
+# 4. Start the server
+uv run python -m openjarvis.server.app --host 0.0.0.0 --port 8000
+
+# 5. Health check
+curl http://localhost:8000/health
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CITYOS_KEYCLOAK_URL` | Yes | — | Keycloak issuer URL for JWT validation |
+| `CITYOS_JWT_AUDIENCE` | No | `cityos-web` | JWT audience claim |
+| `ENABLE_TTS` | No | `false` | Enable Cartesia text-to-speech |
+| `CARTESIA_API_KEY` | No | — | Cartesia API key (required if TTS enabled) |
+| `WHISPER_MODEL` | No | `base` | faster-whisper model size |
+| `CUDA_VISIBLE_DEVICES` | No | — | GPU device for whisper |
+
+### Docker
+
+```bash
+docker build -f deploy/docker/Dockerfile.cityos -t cityosjarvis:latest .
+docker run -p 8000:8000 -e CITYOS_KEYCLOAK_URL=http://host.docker.internal:8080/realms/cityos cityosjarvis:latest
+```
+
+### Compliance Features
+
+- **Saudi PII Detection**: National ID (10-digit), Iqama (10-digit), old format (`
+- **Health PHI Detection**: Blood type, diagnosis keywords, medication names, surgery terms
+- **Financial Data**: Credit cards (Visa, Mastercard, AMEX), Saudi IBANs
+- **Secrets**: API keys, JWT tokens, high-entropy base64 strings
+- **Arabic Support**: Native regex for Arabic health keywords and Saudi phone numbers (`+966`)
+
+### Testing
+
+```bash
+# Python tests (147 tests)
+uv run pytest tests/ -q
+
+# Security tests (48 PHI injection cases)
+uv run pytest tests/cityos/test_security_phi_injection.py -q
+
+# Integration tests
+uv run pytest tests/cityos/test_integration_chat.py -q
+```
+
+### Upstream Sync
+
+This fork is automatically synced with upstream OpenJarvis monthly via `.github/workflows/upstream-sync.yml`.
+
+---
+
+## Installation (Original)
 
 **macOS / Linux:**
 
@@ -41,7 +165,7 @@ The installer handles everything for you — including [uv](https://docs.astral.
 
 **Windows:** the installer is a `bash` script and won't run in PowerShell or `cmd`. Pick one of:
 
-- **WSL2 (recommended for the CLI / Python SDK)** — one-time setup in an admin PowerShell, then run the same `curl … | bash` inside Ubuntu:
+- **WSL2 (recommended for the CLI / Python SDK)** — one-time setup in an admin PowerShell, then run the same `curl ... | bash` inside Ubuntu:
   ```powershell
   wsl --install -d Ubuntu-24.04
   ```
@@ -97,107 +221,4 @@ uv run jarvis init --preset morning-digest-mac   # or any preset below
 uv run jarvis init --preset morning-digest-mac
 uv run jarvis connect gdrive          # one OAuth flow covers Gmail, Calendar, Tasks
 uv run jarvis digest --fresh          # generate and play your first briefing
-
-# Example: Deep Research
-uv run jarvis init --preset deep-research
-uv run jarvis memory index ./docs/    # requires the Rust extension — see Setup above
-uv run jarvis ask "Summarize all emails about Project X"
 ```
-
-### Skills
-
-Skills teach agents how to better use tools and improve their reasoning. Every skill is a tool — agents discover them from a catalog and invoke them on demand.
-
-```bash
-# Install skills from public sources
-jarvis skill install hermes:arxiv
-jarvis skill sync hermes --category research
-
-# Use skills with any agent
-jarvis ask "Use the code-explainer skill to explain this Python code: for i in range(5): print(i*2)"
-
-# Optimize skills from your trace history
-jarvis optimize skills --policy dspy
-
-# Benchmark the impact
-jarvis bench skills --max-samples 5 --seeds 42
-```
-
-Import from [Hermes Agent](https://github.com/NousResearch/hermes-agent) (~150 skills), [OpenClaw](https://github.com/openclaw/skills) (~13,700 community skills), or any GitHub repo. Skills follow the [agentskills.io](https://agentskills.io/specification) open standard.
-
-See the [Skills User Guide](https://open-jarvis.github.io/OpenJarvis/user-guide/skills/) and [Skills Tutorial](https://open-jarvis.github.io/OpenJarvis/tutorials/skills-workflow/) for details.
-
-### Built-in Agents
-
-OpenJarvis ships with eight built-in agents across three execution modes (on-demand, scheduled, continuous):
-
-| Agent | Type | What it does |
-|-------|------|-------------|
-| `morning_digest` | Scheduled | Daily briefing from email, calendar, health, news — with TTS audio |
-| `deep_research` | On-demand | Multi-hop research with citations across web and local docs |
-| `monitor_operative` | Continuous | Long-horizon monitoring with memory, compression, and retrieval |
-| `orchestrator` | On-demand | Multi-turn reasoning with automatic tool selection |
-| `native_react` | On-demand | ReAct (Thought-Action-Observation) loop agent |
-| `operative` | Continuous | Persistent autonomous agent with state management |
-| `native_openhands` | On-demand | CodeAct — generates and executes Python code |
-| `simple` | On-demand | Single-turn chat, no tools |
-
-See the [User Guide](https://open-jarvis.github.io/OpenJarvis/user-guide/morning-digest/) and [Tutorials](https://open-jarvis.github.io/OpenJarvis/tutorials/) for detailed setup instructions.
-
-Full documentation — including Docker deployment, cloud engines, development setup, and tutorials — at **[open-jarvis.github.io/OpenJarvis](https://open-jarvis.github.io/OpenJarvis/)**.
-
-## Community
-
-- **GitHub:** [github.com/open-jarvis/OpenJarvis](https://github.com/open-jarvis/OpenJarvis)
-- **Discord:** [discord.gg/YZZRxCAhmm](https://discord.gg/YZZRxCAhmm)
-- **X / Twitter:** [@OpenJarvisAI](https://x.com/OpenJarvisAI)
-- **Docs:** [open-jarvis.github.io/OpenJarvis](https://open-jarvis.github.io/OpenJarvis/)
-
-## Contributing
-
-We welcome contributions! See the [Contributing Guide](CONTRIBUTING.md) for incentives, contribution types, and the PR process.
-
-Quick start for contributors:
-
-```bash
-git clone https://github.com/open-jarvis/OpenJarvis.git
-cd OpenJarvis
-uv sync --extra dev
-uv run pre-commit install
-uv run pytest tests/ -v
-```
-
-Browse the [Roadmap](https://open-jarvis.github.io/OpenJarvis/development/roadmap/) for areas where help is needed. Comment **"take"** on any issue to get auto-assigned.
-
-## About
-
-OpenJarvis is part of [Intelligence Per Watt](https://www.intelligence-per-watt.ai/), a research initiative studying the intelligence efficiency of AI systems. The project is developed at [Hazy Research](https://hazyresearch.stanford.edu/) and the [Scaling Intelligence Lab](https://scalingintelligence.stanford.edu/) at [Stanford SAIL](https://ai.stanford.edu/).
-
-## Sponsors
-
-<p>
-  <a href="https://www.laude.org/">Laude Institute</a> &bull;
-  <a href="https://datascience.stanford.edu/marlowe">Stanford Marlowe</a> &bull;
-  <a href="https://cloud.google.com/">Google Cloud Platform</a> &bull;
-  <a href="https://lambda.ai/">Lambda Labs</a> &bull;
-  <a href="https://ollama.com/">Ollama</a> &bull;
-  <a href="https://research.ibm.com/">IBM Research</a> &bull;
-  <a href="https://hai.stanford.edu/">Stanford HAI</a>
-</p>
-
-## Citation
-```bibtex
-@misc{saadfalcon2026openjarvispersonalaipersonal,
-      title={OpenJarvis: Personal AI, On Personal Devices}, 
-      author={Jon Saad-Falcon and Avanika Narayan and Robby Manihani and Tanvir Bhathal and Herumb Shandilya and Hakki Orhun Akengin and Gabriel Bo and Andrew Park and Matthew Hart and Caia Costello and Chuan Li and Christopher Ré and Azalia Mirhoseini},
-      year={2026},
-      eprint={2605.17172},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2605.17172}, 
-}
-```
-
-## License
-
-[Apache 2.0](LICENSE)

@@ -18,6 +18,19 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Lazy import to avoid circular dependency at module load time
+_COMPLIANCE_CHECKS = None
+
+def _get_compliance_counter():
+    global _COMPLIANCE_CHECKS
+    if _COMPLIANCE_CHECKS is None:
+        try:
+            from openjarvis.cityos.metrics import COMPLIANCE_CHECKS
+            _COMPLIANCE_CHECKS = COMPLIANCE_CHECKS
+        except Exception:
+            pass
+    return _COMPLIANCE_CHECKS
+
 
 @dataclass(frozen=True, slots=True)
 class ClassificationResult:
@@ -76,7 +89,11 @@ class ComplianceGate:
 
     def classify(self, payload: str) -> ClassificationResult:
         """Classify a request payload and return allow/deny decision."""
+        counter = _get_compliance_counter()
+
         if not payload or not isinstance(payload, str):
+            if counter:
+                counter.labels(result="allowed", category="public").inc()
             return ClassificationResult(
                 allowed=True,
                 category="public",
@@ -88,6 +105,8 @@ class ComplianceGate:
         for pattern, description in self._BLOCKED_PATTERNS:
             if pattern.search(payload):
                 logger.warning("Compliance gate blocked: %s detected", description)
+                if counter:
+                    counter.labels(result="blocked", category="blocked").inc()
                 return ClassificationResult(
                     allowed=False,
                     category="blocked",
@@ -100,6 +119,8 @@ class ComplianceGate:
         health_matches = [kw for kw in self._HEALTH_KEYWORDS if kw.lower() in lower_payload]
         if health_matches:
             logger.warning("Compliance gate restricted: health keywords detected: %s", health_matches)
+            if counter:
+                counter.labels(result="blocked", category="regulated").inc()
             return ClassificationResult(
                 allowed=False,
                 category="regulated",
@@ -109,6 +130,8 @@ class ComplianceGate:
 
         # 3. Length-based heuristic for secrets
         if len(payload) > 5000 and self._looks_like_secret(payload):
+            if counter:
+                counter.labels(result="blocked", category="blocked").inc()
             return ClassificationResult(
                 allowed=False,
                 category="blocked",
@@ -116,6 +139,8 @@ class ComplianceGate:
                 redacted_payload=None,
             )
 
+        if counter:
+            counter.labels(result="allowed", category="public").inc()
         return ClassificationResult(
             allowed=True,
             category="public",

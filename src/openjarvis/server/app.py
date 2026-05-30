@@ -209,6 +209,15 @@ def create_app(
         allow_headers=["*"],
     )
 
+    # Prometheus metrics middleware
+    try:
+        from openjarvis.cityos.metrics import MetricsMiddleware
+
+        app.add_middleware(MetricsMiddleware)
+        logger.info("Prometheus metrics middleware registered")
+    except Exception as exc:
+        logger.debug("Metrics middleware init skipped: %s", exc)
+
     # Store dependencies in app state
     app.state.engine = engine
     app.state.model = model
@@ -354,6 +363,16 @@ def create_app(
             app.include_router(webhook_router)
         except Exception as exc:
             logger.debug("Webhook routes init skipped: %s", exc)
+
+    # Prometheus metrics endpoint
+    try:
+        from openjarvis.cityos.metrics import metrics_endpoint
+
+        @app.get("/metrics")
+        async def _metrics():
+            return metrics_endpoint()
+    except Exception as exc:
+        logger.debug("Metrics endpoint init skipped: %s", exc)
 
     # Serve static frontend assets if the static/ directory exists
     static_dir = pathlib.Path(__file__).parent / "static"

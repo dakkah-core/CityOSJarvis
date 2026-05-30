@@ -188,25 +188,12 @@ def _run_agent_sync(
     agent: Any,
     query: str,
     system_prompt: str,
+    tenant: TenantContext | None = None,
 ) -> dict[str, Any]:
-    """Run the agent synchronously (called in thread pool)."""
-    ctx = AgentContext()
-    messages = [
-        Message(role=Role.SYSTEM, content=system_prompt),
-        Message(role=Role.USER, content=query),
-    ]
-    for m in messages:
-        ctx.conversation.add(m)
-
-    result = agent.run(query, context=ctx)
-    return {
-        "content": result.content,
-        "tool_results": [
-            {"name": tr.name, "status": tr.status}
-            for tr in (result.tool_results or [])
-        ],
-        "turns": result.turns,
-    }
+    """Run the agent synchronously with tenant isolation (called in thread pool)."""
+    from .tenant_runtime import TenantAwareAgentRunner
+    runner = TenantAwareAgentRunner(agent, tenant)
+    return runner.run(query, system_prompt)
 
 
 def _synthesize_if_enabled(text: str, lang: str) -> dict[str, str] | None:
@@ -296,7 +283,7 @@ async def process_intent(
         # Run agent in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
         agent_result = await loop.run_in_executor(
-            None, _run_agent_sync, agent, user_query, system_prompt
+            None, _run_agent_sync, agent, user_query, system_prompt, tenant
         )
 
         response_text = agent_result["content"]

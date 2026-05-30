@@ -319,7 +319,16 @@ def create_app(
     except Exception as exc:
         logger.debug("Security middleware init skipped: %s", exc)
 
-    # API key authentication middleware
+    # CityOS Keycloak JWT authentication middleware
+    try:
+        from openjarvis.cityos.auth import CityOSAuthMiddleware
+
+        app.add_middleware(CityOSAuthMiddleware)
+        logger.info("CityOS Keycloak auth middleware registered")
+    except Exception as exc:
+        logger.debug("CityOS auth middleware init skipped: %s", exc)
+
+    # Fallback: API key authentication middleware (legacy OpenJarvis mode)
     if api_key:
         try:
             from openjarvis.server.auth_middleware import AuthMiddleware

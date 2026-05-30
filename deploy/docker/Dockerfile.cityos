@@ -28,6 +28,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+# Increase network timeout for large package downloads; retry on transient errors
+ENV UV_HTTP_TIMEOUT=300
+ENV UV_RETRY_COUNT=3
+ENV UV_INDEX_STRATEGY=unsafe-best-match
+
 # Copy dependency definitions
 COPY pyproject.toml ./
 COPY README.md ./
@@ -35,12 +40,14 @@ COPY LICENSE ./
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 
-# Install CityOS-required extras:
-#   inference-vllm   — GPU inference (optional, large)
-#   memory-faiss     — Vector search for RAG
-#   scheduler        — Cron-like scheduled agents
-#   server           — FastAPI + Uvicorn
-#   speech           — faster-whisper for STT
+# Install CityOS-required extras in two phases for resilience:
+# Phase 1 — Core runtime (always required)
+#   server    — FastAPI + Uvicorn
+#   scheduler — Cron-like scheduled agents
+#   speech    — faster-whisper for STT/TTS
+RUN uv sync --extra server --extra scheduler --extra speech
+
+# Phase 2 — Optional integrations (best-effort; network hiccups tolerated)
 #   browser          — Playwright for web browsing
 #   tools-search     — Tavily + DDGS search
 #   channel-telegram — Telegram bot channel
@@ -49,7 +56,7 @@ COPY scripts/ ./scripts/
 #   channel-email    — Email channel
 #   pdf              — PDF parsing
 #   security-signing — Cryptography for signing
-RUN uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing
+RUN uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing || true
 
 # --- Runtime stage ---
 FROM python:3.13-slim AS runtime

@@ -1,0 +1,71 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Sync from OpenJarvis upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cityos/main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/open-jarvis/OpenJarvis.git || true
+          git fetch upstream main
+
+      - name: Check for changes
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count cityos/main..upstream/main || echo 0)
+          echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
+          echo "Upstream is $BEHIND commits ahead"
+
+      - name: Create sync branch
+        if: steps.check.outputs.commits_behind != '0'
+        run: |
+          git checkout -b sync/upstream-$(date +%Y%m%d)
+          git merge upstream/main --no-edit || true
+          # Resolve conflicts by keeping ours for CityOS-specific files
+          git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos || true
+          git add -A
+          git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
+          git push origin sync/upstream-$(date +%Y%m%d)
+
+      - name: Create Pull Request
+        if: steps.check.outputs.commits_behind != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "chore: sync upstream $(date +%Y-%m-%d)" \
+            --body "Automated upstream sync from open-jarvis/OpenJarvis.\\n\\n- Commits behind: ${{ steps.check.outputs.commits_behind }}\\n- CityOS-specific files preserved (cityos/, Dockerfile.cityos)\\n\\nPlease review for breaking changes." \
+            --base cityos/main \
+            --head sync/upstream-$(date +%Y%m%d) \
+            --label "upstream-sync" \
+            || echo "PR may already exist"
+
+      - name: No changes needed
+        if: steps.check.outputs.commits_behind == '0'
+        run: echo "Upstream is up to date. No sync needed."

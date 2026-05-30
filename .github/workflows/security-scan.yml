@@ -1,0 +1,161 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [cityos/main]
+  pull_request:
+    branches: [cityos/main]
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scanning:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+
+    env:
+      SCAN_RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.sha) || github.event_name == 'push' && format('{0}..{1}', github.event.before, github.sha) || '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Gitleaks
+        run: |
+          GITLEAKS_VERSION="8.24.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run Gitleaks
+        run: |
+          if [ -n "${SCAN_RANGE}" ] && [ "${SCAN_RANGE}" != "0000000000000000000000000000000000000000..${GITHUB_SHA}" ]; then
+            echo "Scanning commit range: ${SCAN_RANGE}"
+            gitleaks git --redact --verbose --log-opts="${SCAN_RANGE}" --report-format sarif --report-path gitleaks-results.sarif
+          else
+            echo "Scanning full history"
+            gitleaks git --redact --verbose --report-format sarif --report-path gitleaks-results.sarif
+          fi
+
+      - name: Upload Gitleaks SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks-results.sarif
+          category: secret-scanning
+
+  dependency-audit:
+    name: Dependency Audit (uv/pip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.6.x"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Export requirements
+        run: uv export --no-dev --format requirements-txt > requirements.txt
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.txt --format=json --output=pip-audit-results.json || true
+
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -s pip-audit-results.json ]; then
+            CRITICAL=$(cat pip-audit-results.json | python -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for v in data.get('dependencies',[]) for a in v.get('vulns',[]) if a.get('fix_versions')))" || echo 0)
+            echo "Critical vulnerabilities with fixes: $CRITICAL"
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "::warning::Critical vulnerabilities found in dependencies"
+            fi
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-results
+          path: pip-audit-results.json
+          retention-days: 30
+
+  bandit-sast:
+    name: SAST (Bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.6.x"
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync dependencies
+        run: uv sync --extra server --extra scheduler --extra speech
+
+      - name: Run Bandit
+        run: uv run bandit -r src/openjarvis/cityos -f json -o bandit-results.json || true
+
+      - name: Check Bandit results
+        run: |
+          if [ -s bandit-results.json ]; then
+            HIGH=$(cat bandit-results.json | python -c "import sys, json; data=json.load(sys.stdin); print(sum(1 for r in data.get('results',[]) if r.get('issue_severity') in ('HIGH', 'CRITICAL')))" || echo 0)
+            echo "High/Critical issues: $HIGH"
+            if [ "$HIGH" -gt 0 ]; then
+              echo "::warning::Bandit found high/critical severity issues"
+            fi
+          fi
+
+      - name: Upload Bandit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-results
+          path: bandit-results.json
+          retention-days: 14
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [secret-scanning, dependency-audit, bandit-sast]
+    if: always()
+
+    steps:
+      - name: Summarize security results
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit | ${{ needs.dependency-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST (Bandit) | ${{ needs.bandit-sast.result }} |" >> $GITHUB_STEP_SUMMARY

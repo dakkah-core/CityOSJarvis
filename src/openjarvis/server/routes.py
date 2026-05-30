@@ -24,7 +24,13 @@ from openjarvis.server.models import (
     UsageInfo,
 )
 
+from openjarvis.cityos.compliance import ComplianceGate
+from openjarvis.cityos.audit import CityOSAuditLogger
+from openjarvis.cityos.tenant import get_tenant_context
+
 router = APIRouter()
+_compliance_gate = ComplianceGate()
+_audit_logger = CityOSAuditLogger()
 
 
 def _to_messages(chat_messages) -> list[Message]:
@@ -46,9 +52,39 @@ def _to_messages(chat_messages) -> list[Message]:
 @router.post("/v1/chat/completions")
 async def chat_completions(request_body: ChatCompletionRequest, request: Request):
     """Handle chat completion requests (streaming and non-streaming)."""
+    import time
+
     engine = request.app.state.engine
     agent = getattr(request.app.state, "agent", None)
     model = request_body.model
+    tenant = get_tenant_context(request)
+    start_time = time.perf_counter()
+
+    # Extract last user message for compliance check
+    last_user_message = ""
+    for m in reversed(request_body.messages):
+        if m.role == "user" and m.content:
+            last_user_message = m.content
+            break
+
+    # CityOS compliance gate: block PHI/PII before reaching the model
+    if last_user_message:
+        classification = _compliance_gate.classify(last_user_message)
+        if not classification.allowed:
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            _audit_logger.log(
+                event="chat.completion.blocked",
+                tenant=tenant,
+                request={"model": model, "messages_count": len(request_body.messages)},
+                response={"status": "blocked", "reason": classification.reason},
+                compliance={"category": classification.category, "gate_passed": False},
+                latency_ms=latency_ms,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=classification.reason
+                or "Request blocked for privacy. Please contact your service center.",
+            )
 
     # Inject memory context into messages before dispatching
     config = getattr(request.app.state, "config", None)
@@ -137,28 +173,68 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
                 exc_info=True,
             )
 
-    if request_body.stream:
-        bus = getattr(request.app.state, "bus", None)
-        # Use the agent stream bridge only when tools are present (the
-        # bridge runs agent.run() synchronously and word-splits the result,
-        # so it can't stream tokens in real-time).  For plain chat, stream
-        # directly from the engine for true token-by-token output.
-        if agent is not None and bus is not None and request_body.tools:
-            return await _handle_agent_stream(agent, bus, model, request_body)
-        return await _handle_stream(engine, model, request_body, complexity_info)
+    try:
+        if request_body.stream:
+            bus = getattr(request.app.state, "bus", None)
+            # Use the agent stream bridge only when tools are present (the
+            # bridge runs agent.run() synchronously and word-splits the result,
+            # so it can't stream tokens in real-time).  For plain chat, stream
+            # directly from the engine for true token-by-token output.
+            if agent is not None and bus is not None and request_body.tools:
+                response = await _handle_agent_stream(agent, bus, model, request_body)
+            else:
+                response = await _handle_stream(engine, model, request_body, complexity_info)
 
-    # Non-streaming: use agent if available, otherwise direct engine call
-    if agent is not None:
-        return _handle_agent(agent, model, request_body, complexity_info)
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            _audit_logger.log(
+                event="chat.completion",
+                tenant=tenant,
+                request={"model": model, "messages_count": len(request_body.messages), "stream": True},
+                response={"status": "streaming"},
+                compliance={"gate_passed": True},
+                latency_ms=latency_ms,
+            )
+            return response
 
-    bus = getattr(request.app.state, "bus", None)
-    return _handle_direct(
-        engine,
-        model,
-        request_body,
-        bus=bus,
-        complexity_info=complexity_info,
-    )
+        # Non-streaming: use agent if available, otherwise direct engine call
+        if agent is not None:
+            response = _handle_agent(agent, model, request_body, complexity_info)
+        else:
+            bus = getattr(request.app.state, "bus", None)
+            response = _handle_direct(
+                engine,
+                model,
+                request_body,
+                bus=bus,
+                complexity_info=complexity_info,
+            )
+
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        _audit_logger.log(
+            event="chat.completion",
+            tenant=tenant,
+            request={"model": model, "messages_count": len(request_body.messages), "stream": False},
+            response={
+                "status": "success",
+                "choices": len(response.choices) if hasattr(response, "choices") else 0,
+            },
+            compliance={"gate_passed": True},
+            latency_ms=latency_ms,
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        _audit_logger.log(
+            event="chat.completion.error",
+            tenant=tenant,
+            request={"model": model, "messages_count": len(request_body.messages)},
+            response={"status": "error", "error": str(exc)},
+            compliance={"gate_passed": True},
+            latency_ms=latency_ms,
+        )
+        raise
 
 
 def _handle_direct(

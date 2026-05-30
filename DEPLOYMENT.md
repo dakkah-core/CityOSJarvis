@@ -9,13 +9,19 @@
 1. [Local Development](#local-development)
 2. [Docker (Standalone)](#docker-standalone)
 3. [Docker (Integrated with CityOS)](#docker-integrated-with-cityos)
-4. [VPS Deployment](#vps-deployment)
-5. [Client App Builds](#client-app-builds)
+4. [Docker (Local Build — All Images)](#docker-local-build--all-images)
+5. [AI Stack & LLM Routing](#ai-stack--llm-routing)
+   - [LiteLLM Gateway](#litellm-gateway)
+   - [Ollama Local Inference](#ollama-local-inference)
+   - [Supported Providers](#supported-providers)
+6. [VPS Deployment](#vps-deployment)
+7. [Client App Builds](#client-app-builds)
    - [Web Platform](#web-platform)
    - [Desktop (Tauri)](#desktop-tauri)
    - [Mobile (Expo)](#mobile-expo)
-6. [GitHub Actions CI/CD](#github-actions-cicd)
-7. [Troubleshooting](#troubleshooting)
+8. [E2E Testing](#e2e-testing)
+9. [GitHub Actions CI/CD](#github-actions-cicd)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -112,6 +118,84 @@ CityOSJarvis connects to:
 - **Keycloak** — existing `cityos-keycloak` container
 - **Loki** — existing `cityos-infra_loki` container
 - **Traefik** — auto-registered route at `/jarvis`
+
+---
+
+## Docker (Local Build — All Images)
+
+Build everything from source for integration testing:
+
+```bash
+cd deploy/docker
+docker compose -f docker-compose.build.yml up -d --build
+```
+
+This builds and starts:
+- **CityOSJarvis** from `Dockerfile.cityos`
+- **LiteLLM** proxy (pulled from GHCR)
+- **Ollama** (pulled, models downloaded at runtime)
+- **Postgres, Redis, Loki, Promtail**
+
+### Test the build
+
+```bash
+# Health checks
+curl http://localhost:8000/health
+curl http://localhost:4000/health/liveliness
+curl http://localhost:11434/api/tags
+
+# E2E tests
+npx playwright test --config=e2e/ai-stack/playwright.config.ts
+```
+
+---
+
+## AI Stack & LLM Routing
+
+CityOSJarvis supports three LLM routing modes via `CITYOSJARVIS_LLM_MODE`:
+
+| Mode | Endpoint | Use Case |
+|------|----------|----------|
+| `gateway` | `http://litellm:4000` | **Default** — multi-provider with automatic fallback |
+| `ollama` | `http://ollama:11434` | Fully offline, no API keys |
+| `direct` | Cloud APIs directly | BYO endpoint, bypass LiteLLM |
+
+### LiteLLM Gateway
+
+The LiteLLM proxy provides a unified OpenAI-compatible API over multiple providers with built-in fallback:
+
+```yaml
+# Fallback chain (infra/litellm/config.yaml)
+gpt-4o:
+  → claude-sonnet-4
+  → azure-gpt-4o
+  → kimi-k2
+  → llama-local
+```
+
+### Supported Providers
+
+| Provider | Models | Environment Variable |
+|----------|--------|----------------------|
+| OpenAI | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
+| Anthropic | claude-sonnet-4, claude-haiku | `ANTHROPIC_API_KEY` |
+| Azure OpenAI | azure-gpt-4o | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY` |
+| Google Gemini | gemini-pro | `GEMINI_API_KEY` |
+| **Moonshot AI (Kimi)** | **kimi-k2, kimi-lite** | **`MOONSHOT_API_KEY`** |
+| Ollama (local) | llama3.1, nomic-embed-text | None |
+
+### Ollama Local Inference
+
+For fully offline development:
+
+```bash
+# Pull a model
+docker exec -it cityos-ollama ollama pull llama3.1
+
+# Set mode
+docker compose -f docker-compose.build.yml exec cityosjarvis \
+  sh -c 'export CITYOSJARVIS_LLM_MODE=ollama && python -m openjarvis.main'
+```
 
 ---
 
@@ -229,6 +313,43 @@ pnpm eas:ota
 2. `eas build:configure` — one-time project setup
 3. iOS: Apple Developer account + provisioning profiles
 4. Android: Upload keystore to EAS
+
+---
+
+## E2E Testing
+
+### AI Stack E2E
+
+Located in `e2e/ai-stack/`. Tests the full pipeline: Jarvis → LiteLLM → Provider API.
+
+```bash
+# Start the full stack
+cd deploy/docker
+docker compose -f docker-compose.build.yml up -d --build
+
+# Run E2E tests
+cd ../..
+npx playwright test --config=e2e/ai-stack/playwright.config.ts
+```
+
+### Test Coverage
+
+| Test File | What It Tests |
+|-----------|---------------|
+| `health-checks.spec.ts` | Jarvis, LiteLLM, Ollama health endpoints; model list verification |
+| `gateway-routing.spec.ts` | Routing to OpenAI, Kimi, Ollama embeddings; invalid model 404 |
+| `jarvis-chat.spec.ts` | Streaming/non-streaming chat, compliance gate, tenant context forwarding |
+| `fallback-resilience.spec.ts` | Rate limiting, missing models, structured error responses |
+
+### Environment Variables
+
+```env
+E2E_JARVIS_URL=http://localhost:8000
+E2E_LITELLM_URL=http://localhost:4000
+E2E_OLLAMA_URL=http://localhost:11434
+LITELLM_MASTER_KEY=sk-litellm-cityos-local
+OPENJARVIS_API_KEY=cityos-local-key
+```
 
 ---
 

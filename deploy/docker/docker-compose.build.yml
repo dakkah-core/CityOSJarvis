@@ -1,0 +1,203 @@
+# =============================================================================
+# CityOSJarvis Local Build Stack
+# =============================================================================
+# Builds ALL images from source for local integration testing.
+# This is the "kitchen sink" compose — use it to verify everything works
+# before pushing to CI or deploying to VPS.
+#
+# Usage:
+#   cd deploy/docker
+#   docker compose -f docker-compose.build.yml up -d --build
+#
+# Services built from source:
+#   - CityOSJarvis (Python FastAPI)
+#   - LiteLLM proxy (ghcr.io/berriai/litellm — pulled, not built)
+#   - Ollama (ollama/ollama — pulled, models downloaded at runtime)
+#   - Postgres, Redis, Loki, Promtail (pulled)
+#
+# After build, run E2E tests:
+#   cd ../../e2e && npx playwright test ai-stack/
+# =============================================================================
+
+name: cityosjarvis-build
+
+services:
+  cityosjarvis:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.cityos
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.13-slim}
+        WHISPER_MODEL: ${WHISPER_MODEL:-base}
+        ENABLE_TTS: ${ENABLE_TTS:-false}
+    image: cityosjarvis:local
+    container_name: cityosjarvis-local
+    ports:
+      - "8000:8000"
+    environment:
+      OPENJARVIS_API_KEY: ${OPENJARVIS_API_KEY:-cityos-local-key}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-cityos}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-cityosjarvis}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://jarvis:jarvis@postgres:5432/jarvis}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CITYOS_AUDIT_DIR: /var/log/cityosjarvis
+      CITYOS_LOG_LEVEL: ${CITYOS_LOG_LEVEL:-DEBUG}
+      CITYOSJARVIS_LLM_MODE: ${CITYOSJARVIS_LLM_MODE:-gateway}
+      CITYOSJARVIS_LLM_MODEL: ${CITYOSJARVIS_LLM_MODEL:-gpt-4o-mini}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-http://litellm:4000}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      ENABLE_TTS: ${ENABLE_TTS:-false}
+      CARTESIA_API_KEY: ${CARTESIA_API_KEY:-}
+      LOKI_URL: ${LOKI_URL:-http://loki:3100}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # External API keys (for LiteLLM gateway or direct mode)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-cityos-local}
+    volumes:
+      - cityosjarvis-audit:/var/log/cityosjarvis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    networks:
+      - cityos-build
+
+  litellm:
+    image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-latest}
+    container_name: litellm-local
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../../infra/litellm/config.yaml:/app/config.yaml:ro
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-cityos-local}
+    command:
+      - --config
+      - /app/config.yaml
+      - --detailed_debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    networks:
+      - cityos-build
+
+  ollama:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-latest}
+    container_name: ollama-local
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${OLLAMA_GPU_COUNT:-0}
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - cityos-build
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-local
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvis
+      POSTGRES_DB: jarvis
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cityos-build
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-local
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cityos-build
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki-local
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - cityos-build
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail-local
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - cityosjarvis-audit:/var/log/cityosjarvis:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - cityos-build
+
+volumes:
+  cityosjarvis-audit:
+  ollama-models:
+  postgres-data:
+  redis-data:
+
+networks:
+  cityos-build:
+    driver: bridge

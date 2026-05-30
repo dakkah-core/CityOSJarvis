@@ -30,7 +30,10 @@ WORKDIR /app
 
 # Copy dependency definitions
 COPY pyproject.toml ./
-COPY src/openjarvis/_rust_bridge.py ./src/openjarvis/_rust_bridge.py
+COPY README.md ./
+COPY LICENSE ./
+COPY src/ ./src/
+COPY scripts/ ./scripts/
 
 # Install CityOS-required extras:
 #   inference-vllm   — GPU inference (optional, large)

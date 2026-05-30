@@ -91,15 +91,27 @@ def serve(
         except Exception as exc:
             logger.debug("Telemetry store init failed: %s", exc)
 
-    resolved = get_engine(config, engine_key)
-    if resolved is None:
-        console.print(
-            "[red bold]No inference engine available.[/red bold]\n\n"
-            "Make sure an engine is running."
-        )
-        sys.exit(1)
+    # CityOS LLM routing: override default discovery when CITYOSJARVIS_LLM_MODE is set
+    cityos_resolved = None
+    try:
+        from openjarvis.cityos.llm_config import get_cityos_llm_config
 
-    engine_name, engine = resolved
+        cityos_resolved = get_cityos_llm_config()
+    except Exception as exc:
+        logger.debug("CityOS LLM config skipped: %s", exc)
+
+    if cityos_resolved is not None:
+        engine_name, engine, model_name = cityos_resolved
+        console.print(f"  CityOS: [cyan]{engine_name}[/cyan] mode (model: {model_name})")
+    else:
+        resolved = get_engine(config, engine_key)
+        if resolved is None:
+            console.print(
+                "[red bold]No inference engine available.[/red bold]\n\n"
+                "Make sure an engine is running."
+            )
+            sys.exit(1)
+        engine_name, engine = resolved
 
     # Apply security guardrails
     from openjarvis.security import setup_security
@@ -111,6 +123,11 @@ def serve(
     # and cloud models appear in the model list and can be used.
     import os
 
+    # Skip auto cloud wrapping when CityOS LiteLLM gateway is active
+    # (LiteLLM already handles multi-provider routing + fallback)
+    _cityos_mode = os.environ.get("CITYOSJARVIS_LLM_MODE", "").strip().lower()
+    _skip_cloud_wrap = _cityos_mode == "gateway"
+
     _has_cloud = (
         os.environ.get("OPENAI_API_KEY")
         or os.environ.get("ANTHROPIC_API_KEY")
@@ -118,7 +135,7 @@ def serve(
         or os.environ.get("GOOGLE_API_KEY")
         or os.environ.get("OPENROUTER_API_KEY")
     )
-    if _has_cloud and engine_name != "cloud":
+    if _has_cloud and engine_name != "cloud" and not _skip_cloud_wrap:
         try:
             from openjarvis.engine.cloud import CloudEngine
             from openjarvis.engine.multi import MultiEngine

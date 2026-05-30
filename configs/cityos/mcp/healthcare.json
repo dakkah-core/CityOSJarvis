@@ -1,0 +1,137 @@
+{
+  "name": "cityos-healthcare",
+  "version": "1.0.0",
+  "description": "MCP server for CityOS healthcare domain — facility directory, services, scheduling (NO PHI)",
+  "transport": {
+    "type": "sse",
+    "url": "http://cityos-bff:4003/api/mcp/healthcare"
+  },
+  "authentication": {
+    "type": "bearer",
+    "header": "Authorization"
+  },
+  "compliance_note": "This MCP server explicitly excludes patient records, diagnoses, prescriptions, and all PHI. Only public facility information and scheduling availability are exposed.",
+  "tools": [
+    {
+      "name": "find_facility",
+      "description": "Find healthcare facilities (clinics, hospitals, pharmacies) by location, specialty, or availability",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "specialty": { "type": "string", "description": "e.g. pediatrics, cardiology, general" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "radius_km": { "type": "number", "default": 10 },
+          "open_now": { "type": "boolean", "default": false }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "facilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "type": { "type": "string", "enum": ["hospital", "clinic", "pharmacy", "lab"] },
+                "address": { "type": "string" },
+                "phone": { "type": "string" },
+                "specialties": { "type": "array", "items": { "type": "string" } },
+                "distance_km": { "type": "number" },
+                "opening_hours": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "get_available_slots",
+      "description": "Get available appointment slots for a facility and service type",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "facility_id": { "type": "string" },
+          "service_type": { "type": "string" },
+          "date_from": { "type": "string", "format": "date" },
+          "date_to": { "type": "string", "format": "date" }
+        },
+        "required": ["facility_id", "service_type"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "datetime": { "type": "string" },
+                "provider_name": { "type": "string" },
+                "available": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "search_health_policies",
+      "description": "Search public health policies, vaccination requirements, and health education materials",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "language": { "type": "string", "enum": ["en", "ar"], "default": "en" }
+        },
+        "required": ["query"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "excerpt": { "type": "string" },
+                "source": { "type": "string" },
+                "last_updated": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "check_eligibility",
+      "description": "Check eligibility for public health programs based on non-PHI criteria (age, residency, income bracket)",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "program": { "type": "string", "enum": ["senior_care", "child_vaccination", "disability_support", "low_income"] },
+          "age": { "type": "number" },
+          "residency_years": { "type": "number" },
+          "household_size": { "type": "number" }
+        },
+        "required": ["program"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "eligible": { "type": "boolean" },
+          "criteria_met": { "type": "array", "items": { "type": "string" } },
+          "criteria_missing": { "type": "array", "items": { "type": "string" } },
+          "next_steps": { "type": "string" }
+        }
+      }
+    }
+  ]
+}

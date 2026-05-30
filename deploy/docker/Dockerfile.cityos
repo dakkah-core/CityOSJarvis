@@ -1,0 +1,96 @@
+# CityOSJarvis — Production Docker Image
+# Based on OpenJarvis with CityOS-specific extras pre-installed
+#
+# Build:
+#   docker build -f deploy/docker/Dockerfile.cityos -t ghcr.io/dakkah/cityosjarvis:latest .
+#
+# Run:
+#   docker run -p 8000:8000 \
+#     -e KEYCLOAK_URL=http://keycloak:8080 \
+#     -e KEYCLOAK_REALM=cityos \
+#     -e OPENJARVIS_API_KEY=${OPENJARVIS_API_KEY} \
+#     -e CITYOS_AUDIT_DIR=/var/log/cityosjarvis \
+#     ghcr.io/dakkah/cityosjarvis:latest
+
+FROM python:3.13-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cargo \
+    rustc \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy dependency definitions
+COPY pyproject.toml ./
+COPY src/openjarvis/_rust_bridge.py ./src/openjarvis/_rust_bridge.py
+
+# Install CityOS-required extras:
+#   inference-vllm   — GPU inference (optional, large)
+#   memory-faiss     — Vector search for RAG
+#   scheduler        — Cron-like scheduled agents
+#   server           — FastAPI + Uvicorn
+#   speech           — faster-whisper for STT
+#   browser          — Playwright for web browsing
+#   tools-search     — Tavily + DDGS search
+#   channel-telegram — Telegram bot channel
+#   channel-slack    — Slack channel
+#   channel-discord  — Discord channel
+#   channel-email    — Email channel
+#   pdf              — PDF parsing
+#   security-signing — Cryptography for signing
+RUN uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing
+
+# --- Runtime stage ---
+FROM python:3.13-slim AS runtime
+
+# Runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy application code
+COPY src/ ./src/
+COPY configs/ ./configs/
+COPY rust/ ./rust/
+COPY README.md LICENSE ./
+
+# Build Rust extensions (if maturin is available)
+RUN if command -v maturin >/dev/null 2>&1; then \
+        cd rust && maturin develop --release || true; \
+    fi
+
+# Create audit log directory
+RUN mkdir -p /var/log/cityosjarvis && chmod 755 /var/log/cityosjarvis
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fs http://localhost:8000/health || exit 1
+
+# Expose API port
+EXPOSE 8000
+
+# Run as non-root user
+RUN useradd -m -s /bin/bash cityosjarvis && chown -R cityosjarvis:cityosjarvis /app /var/log/cityosjarvis
+USER cityosjarvis
+
+# Default: start API server with CityOS patches loaded
+CMD ["python", "-m", "openjarvis.cli", "serve", "--host", "0.0.0.0", "--port", "8000"]

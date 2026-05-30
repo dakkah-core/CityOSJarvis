@@ -1,0 +1,120 @@
+{
+  "name": "cityos-fleet-logistics",
+  "version": "1.0.0",
+  "description": "MCP server for CityOS fleet-logistics domain — Fleetbase integration, routes, deliveries, vehicle telemetry",
+  "transport": {
+    "type": "sse",
+    "url": "http://cityos-bff:4004/api/mcp/fleet"
+  },
+  "authentication": {
+    "type": "bearer",
+    "header": "Authorization"
+  },
+  "tools": [
+    {
+      "name": "get_route",
+      "description": "Get optimized route for waypoints considering traffic and vehicle constraints",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "waypoints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lat": { "type": "number" },
+                "lng": { "type": "number" },
+                "address": { "type": "string" }
+              }
+            }
+          },
+          "vehicle_type": { "type": "string", "enum": ["car", "van", "truck", "motorcycle"] },
+          "avoid_tolls": { "type": "boolean", "default": false }
+        },
+        "required": ["waypoints"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "distance_km": { "type": "number" },
+          "estimated_duration_min": { "type": "number" },
+          "route": { "type": "array" },
+          "traffic_delay_min": { "type": "number" }
+        }
+      }
+    },
+    {
+      "name": "update_delivery_status",
+      "description": "Update the status of a delivery (pickup, in-transit, delivered, failed)",
+      "risk_level": "low-risk",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "delivery_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["picked_up", "in_transit", "delivered", "failed", "returned"] },
+          "notes": { "type": "string" },
+          "signature_image": { "type": "string", "description": "Base64-encoded signature image (optional)" }
+        },
+        "required": ["delivery_id", "status"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "updated_at": { "type": "string" },
+          "next_delivery_id": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "get_vehicle_telemetry",
+      "description": "Get real-time telemetry for a vehicle (engine temp, fuel, location, speed)",
+      "risk_level": "read-only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "vehicle_id": { "type": "string" }
+        },
+        "required": ["vehicle_id"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "vehicle_id": { "type": "string" },
+          "location": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
+          "speed_kmh": { "type": "number" },
+          "engine_temp_c": { "type": "number" },
+          "fuel_percent": { "type": "number" },
+          "odometer_km": { "type": "number" },
+          "last_updated": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "report_incident",
+      "description": "Report a traffic incident, vehicle breakdown, or safety event",
+      "risk_level": "approval-required",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "incident_type": { "type": "string", "enum": ["accident", "breakdown", "theft", "hazard", "injury"] },
+          "location": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" }, "address": { "type": "string" } } },
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "photos": { "type": "array", "items": { "type": "string" }, "description": "Array of MinIO photo URLs" }
+        },
+        "required": ["incident_type", "location", "severity"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "incident_id": { "type": "string" },
+          "status": { "type": "string" },
+          "dispatch_notified": { "type": "boolean" },
+          "estimated_response_min": { "type": "number" }
+        }
+      }
+    }
+  ]
+}

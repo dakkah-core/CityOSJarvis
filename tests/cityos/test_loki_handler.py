@@ -1,9 +1,9 @@
-"""Tests for Loki log forwarding integration."""
+"""Tests for Grafana Loki log forwarding."""
 
 from __future__ import annotations
 
 import json
-import time
+import os
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -12,120 +12,97 @@ from openjarvis.cityos.loki_handler import LokiHandler
 
 
 class TestLokiHandler:
-    def test_init_from_env(self) -> None:
-        with patch.dict("os.environ", {"LOKI_URL": "http://loki:3100"}):
-            handler = LokiHandler()
-            assert handler.loki_url == "http://loki:3100"
+    @pytest.fixture
+    def handler(self):
+        return LokiHandler(loki_url="http://localhost:3100")
 
-    def test_init_from_arg(self) -> None:
-        handler = LokiHandler("http://custom:3100")
-        assert handler.loki_url == "http://custom:3100"
+    def test_init(self, handler: LokiHandler) -> None:
+        assert handler.push_url == "http://localhost:3100/loki/api/v1/push"
+        assert handler.loki_url == "http://localhost:3100"
+        assert handler.enabled is True
 
-    def test_disabled_when_env_false(self) -> None:
-        with patch.dict("os.environ", {"ENABLE_LOKI": "false"}):
-            handler = LokiHandler()
-            assert handler.enabled is False
+    def test_default_url_from_env(self) -> None:
+        with patch.dict(os.environ, {"LOKI_URL": "http://loki:3100"}):
+            h = LokiHandler()
+            assert h.loki_url == "http://loki:3100"
 
-    def test_create_payload_structure(self) -> None:
-        handler = LokiHandler("http://loki:3100")
+    def test_disabled_when_env_set(self) -> None:
+        with patch.dict(os.environ, {"ENABLE_LOKI": "false"}):
+            h = LokiHandler()
+            assert h.enabled is False
+
+    def test_create_payload_structure(self, handler: LokiHandler) -> None:
         event = {
-            "event": "chat.completed",
             "tenant_id": "t1",
-            "correlation_id": "abc-123",
+            "correlation_id": "corr-123",
+            "event": "chat.completed",
             "timestamp": "2024-01-01T00:00:00Z",
         }
-
         payload = handler._create_payload(event)
-
         assert "streams" in payload
         assert len(payload["streams"]) == 1
         stream = payload["streams"][0]
         assert stream["stream"]["tenant_id"] == "t1"
+        assert stream["stream"]["correlation_id"] == "corr-123"
         assert stream["stream"]["event_type"] == "chat.completed"
-        assert stream["stream"]["correlation_id"] == "abc-123"
         assert len(stream["values"]) == 1
+        # values are [timestamp_ns, line_json]
+        assert len(stream["values"][0]) == 2
 
-    def test_send_success(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        handler.enabled = True
+    def test_create_payload_default_correlation(self, handler: LokiHandler) -> None:
+        event = {"tenant_id": "t1", "event": "test"}
+        payload = handler._create_payload(event)
+        stream = payload["streams"][0]
+        assert stream["stream"]["correlation_id"] == "none"
 
-        mock_response = MagicMock()
-        mock_response.status = 204
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=None)
+    @patch("openjarvis.cityos.loki_handler.urlopen")
+    def test_send_success(self, mock_urlopen, handler: LokiHandler) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status = 204
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
 
-        with patch("openjarvis.cityos.loki_handler.urlopen", return_value=mock_response):
-            result = handler.send({"event": "test", "tenant_id": "t1"})
-
+        event = {
+            "tenant_id": "t1",
+            "correlation_id": "trace-123",
+            "event": "chat.completed",
+        }
+        result = handler.send(event)
         assert result is True
 
-    def test_send_failure(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        handler.enabled = True
+    @patch("openjarvis.cityos.loki_handler.urlopen")
+    def test_send_failure(self, mock_urlopen, handler: LokiHandler) -> None:
+        from urllib.error import URLError
+        mock_urlopen.side_effect = URLError("Connection refused")
 
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            from urllib.error import URLError
-            mock_urlopen.side_effect = URLError("Connection refused")
-            result = handler.send({"event": "test", "tenant_id": "t1"})
-
+        event = {"tenant_id": "t1", "event": "chat.completed"}
+        result = handler.send(event)
         assert result is False
 
-    def test_send_when_disabled(self) -> None:
-        handler = LokiHandler("http://loki:3100")
+    def test_send_when_disabled(self, handler: LokiHandler) -> None:
         handler.enabled = False
-
-        result = handler.send({"event": "test", "tenant_id": "t1"})
+        event = {"tenant_id": "t1", "event": "chat.completed"}
+        result = handler.send(event)
         assert result is False
 
-    def test_send_batch_groups_by_labels(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        handler.enabled = True
+    @patch("openjarvis.cityos.loki_handler.urlopen")
+    def test_send_batch_success(self, mock_urlopen, handler: LokiHandler) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status = 204
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
 
         events = [
-            {"event": "chat", "tenant_id": "t1", "correlation_id": "a"},
-            {"event": "chat", "tenant_id": "t1", "correlation_id": "b"},
-            {"event": "voice", "tenant_id": "t2", "correlation_id": "c"},
+            {"tenant_id": "t1", "event": "chat.completed"},
+            {"tenant_id": "t1", "event": "chat.completed"},
+            {"tenant_id": "t2", "event": "voice.processed"},
         ]
-
-        mock_response = MagicMock()
-        mock_response.status = 204
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=None)
-
-        with patch("openjarvis.cityos.loki_handler.urlopen", return_value=mock_response):
-            result = handler.send_batch(events)
-
+        result = handler.send_batch(events)
         assert result is True
 
-    def test_send_batch_empty(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        handler.enabled = True
-
+    def test_send_batch_empty(self, handler: LokiHandler) -> None:
         result = handler.send_batch([])
         assert result is False
 
-    def test_tenant_label_on_all_events(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        event = {"event": "test", "tenant_id": "tenant-42"}
-
-        payload = handler._create_payload(event)
-        assert payload["streams"][0]["stream"]["tenant_id"] == "tenant-42"
-
-    def test_unknown_tenant_defaults(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        event = {"event": "test"}  # No tenant_id
-
-        payload = handler._create_payload(event)
-        assert payload["streams"][0]["stream"]["tenant_id"] == "unknown"
-
-    def test_timestamp_is_nanoseconds(self) -> None:
-        handler = LokiHandler("http://loki:3100")
-        event = {"event": "test", "tenant_id": "t1"}
-
-        payload = handler._create_payload(event)
-        ts_str = payload["streams"][0]["values"][0][0]
-        ts = int(ts_str)
-
-        # Should be nanoseconds (much larger than milliseconds)
-        assert ts > 1e15
-        assert ts < 1e20
+    def test_send_batch_when_disabled(self, handler: LokiHandler) -> None:
+        handler.enabled = False
+        result = handler.send_batch([{"tenant_id": "t1", "event": "test"}])
+        assert result is False

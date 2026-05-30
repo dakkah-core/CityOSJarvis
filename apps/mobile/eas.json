@@ -1,0 +1,44 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "API_URL": "https://staging.dakkah.city/api/bff/ai",
+        "ENABLE_VOICE": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "API_URL": "https://dakkah.city/api/bff/ai",
+        "ENABLE_VOICE": "true",
+        "ENABLE_ANALYTICS": "true"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "production"
+      },
+      "ios": {
+        "ascAppId": "1234567890",
+        "ascTeamId": "ABCDE12345"
+      }
+    }
+  }
+}

@@ -160,27 +160,8 @@ def _generate_suggestions(intent: str, _response_text: str) -> list[str]:
 
 def _load_voice_system_prompt(tenant: TenantContext | None) -> str:
     """Load the CityOS voice-optimized system prompt."""
-    prompts_dir = Path(__file__).parent / "prompts"
-    prompt_file = prompts_dir / "citizen-support.system.md"
-
-    if prompt_file.exists():
-        base_prompt = prompt_file.read_text(encoding="utf-8")
-    else:
-        base_prompt = (
-            "You are Dakkah, the CityOS voice assistant. "
-            "Help users with city services."
-        )
-
-    # Append voice-specific constraints
-    voice_constraints = (
-        "\n\n## Voice Mode Constraints\n"
-        "- Keep responses VERY concise (1-2 sentences maximum)\n"
-        "- Do not use lists, tables, or markdown formatting\n"
-        "- Speak naturally; avoid abbreviations and special characters\n"
-        "- If the user speaks Arabic, respond in Arabic\n"
-        "- If you need to give steps, limit to 3 steps max and speak them slowly\n"
-    )
-    return base_prompt + voice_constraints
+    from .voice_prompts import load_voice_prompt
+    return load_voice_prompt("citizen-support", tenant=tenant)
 
 
 def _run_agent_sync(

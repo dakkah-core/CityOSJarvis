@@ -19,6 +19,14 @@ on:
         required: false
         default: false
         type: boolean
+      base-image:
+        description: 'Base image variant'
+        required: false
+        default: 'python:3.13-slim'
+        type: choice
+        options:
+          - python:3.13-slim
+          - nvidia/cuda:12.0-base-ubuntu22.04
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,6 +48,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,6 +78,32 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:ci-${{ github.sha }}
           cache-from: type=gha,scope=cityosjarvis-docker
           cache-to: type=gha,scope=cityosjarvis-docker,mode=max
+          build-args: |
+            BASE_IMAGE=${{ github.event.inputs.base-image || 'python:3.13-slim' }}
+            WHISPER_MODEL=base
+            ENABLE_TTS=true
+
+      - name: Verify health check
+        run: |
+          docker run -d --name cityosjarvis-test -p 8000:8000 \
+            -e OPENJARVIS_API_KEY=ci-test-key \
+            -e CITYOS_AUDIT_DIR=/tmp/audit \
+            ${{ env.IMAGE_NAME }}:ci-${{ github.sha }}
+          echo "Waiting for health check..."
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Health check passed!"
+              docker stop cityosjarvis-test
+              docker rm cityosjarvis-test
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Health check failed"
+          docker logs cityosjarvis-test
+          docker stop cityosjarvis-test || true
+          docker rm cityosjarvis-test || true
+          exit 1
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.29.0
@@ -93,18 +130,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
+      - name: Push multi-arch image
         if: ${{ github.event.inputs.publish-image == 'true' || startsWith(github.ref, 'refs/tags/v') }}
-        run: |
-          docker tag ${{ env.IMAGE_NAME }}:ci-${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG=${GITHUB_REF#refs/tags/}
-            docker tag ${{ env.IMAGE_NAME }}:ci-${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}
-            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}
-            docker tag ${{ env.IMAGE_NAME }}:ci-${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          fi
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, github.ref_name) || '' }}
+          cache-from: type=gha,scope=cityosjarvis-docker
+          build-args: |
+            BASE_IMAGE=${{ github.event.inputs.base-image || 'python:3.13-slim' }}
+            WHISPER_MODEL=base
+            ENABLE_TTS=true
 
       - name: Create build manifest
         run: |
@@ -115,7 +157,8 @@ jobs:
             "runId": "${{ github.run_id }}",
             "commitSha": "${{ github.sha }}",
             "ref": "${{ github.ref }}",
-            "pythonVersion": "3.12",
+            "pythonVersion": "3.13",
+            "baseImage": "${{ github.event.inputs.base-image || 'python:3.13-slim' }}",
             "imageDigest": "${{ steps.build.outputs.digest }}",
             "timestampUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }

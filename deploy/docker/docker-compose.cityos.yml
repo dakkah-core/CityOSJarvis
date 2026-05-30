@@ -1,0 +1,137 @@
+version: "3.8"
+
+services:
+  cityosjarvis:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.cityos
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.13-slim}
+        WHISPER_MODEL: ${WHISPER_MODEL:-base}
+        ENABLE_TTS: ${ENABLE_TTS:-true}
+    image: ghcr.io/dakkah/cityosjarvis:latest
+    container_name: cityosjarvis
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENJARVIS_API_KEY=${OPENJARVIS_API_KEY}
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8080}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-cityos}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-cityosjarvis}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://jarvis:jarvis@postgres:5432/jarvis}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CITYOS_AUDIT_DIR=/var/log/cityosjarvis
+      - CITYOS_LOG_LEVEL=${CITYOS_LOG_LEVEL:-INFO}
+      - ENABLE_TTS=${ENABLE_TTS:-true}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY}
+      - LOKI_URL=${LOKI_URL:-http://loki:3100}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - cityosjarvis-audit:/var/log/cityosjarvis
+      - cityosjarvis-models:/app/data/models
+    networks:
+      - cityos
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cityosjarvis-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - cityos
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: cityosjarvis-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=jarvis
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-jarvis}
+      - POSTGRES_DB=jarvis
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - cityos
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cityosjarvis-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - cityos
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: cityosjarvis-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+    networks:
+      - cityos
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: cityosjarvis-promtail
+    restart: unless-stopped
+    volumes:
+      - cityosjarvis-audit:/var/log/cityosjarvis:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    networks:
+      - cityos
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+volumes:
+  cityosjarvis-audit:
+  cityosjarvis-models:
+  ollama-models:
+  postgres-data:
+  redis-data:
+  loki-data:
+
+networks:
+  cityos:
+    name: cityos
+    driver: bridge
+    external: false

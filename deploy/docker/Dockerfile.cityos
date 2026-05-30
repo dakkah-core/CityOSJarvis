@@ -12,7 +12,14 @@
 #     -e CITYOS_AUDIT_DIR=/var/log/cityosjarvis \
 #     ghcr.io/dakkah/cityosjarvis:latest
 
-FROM python:3.13-slim AS builder
+ARG BASE_IMAGE=python:3.13-slim
+ARG WHISPER_MODEL=base
+ARG ENABLE_TTS=true
+
+FROM ${BASE_IMAGE} AS builder
+
+ARG WHISPER_MODEL
+ARG ENABLE_TTS
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -32,6 +39,8 @@ WORKDIR /app
 ENV UV_HTTP_TIMEOUT=300
 ENV UV_RETRY_COUNT=3
 ENV UV_INDEX_STRATEGY=unsafe-best-match
+ENV WHISPER_MODEL=${WHISPER_MODEL}
+ENV ENABLE_TTS=${ENABLE_TTS}
 
 # Copy dependency definitions
 COPY pyproject.toml ./
@@ -59,7 +68,10 @@ RUN uv sync --extra server --extra scheduler --extra speech
 RUN uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing || true
 
 # --- Runtime stage ---
-FROM python:3.13-slim AS runtime
+FROM ${BASE_IMAGE} AS runtime
+
+ARG WHISPER_MODEL
+ARG ENABLE_TTS
 
 # Runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

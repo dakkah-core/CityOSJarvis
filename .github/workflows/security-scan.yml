@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   secret-scanning:
-    name: Secret Scanning (Gitleaks)
+    name: Secret Scanning (Gitleaks + Custom)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -48,6 +48,11 @@ jobs:
             gitleaks git --redact --verbose --report-format sarif --report-path gitleaks-results.sarif
           fi
 
+      - name: Run custom secret patterns
+        run: |
+          chmod +x scripts/security/scan-secrets.sh
+          bash scripts/security/scan-secrets.sh || true
+
       - name: Upload Gitleaks SARIF
         if: always()
         continue-on-error: true
@@ -56,8 +61,16 @@ jobs:
           sarif_file: gitleaks-results.sarif
           category: secret-scanning
 
+      - name: Upload custom scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results
+          path: .build/reports/secret-scan.txt
+          retention-days: 14
+
   dependency-audit:
-    name: Dependency Audit (uv/pip)
+    name: Dependency Audit (uv/pip + Safety)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -73,7 +86,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Export requirements
         run: uv export --no-dev --format requirements-txt > requirements.txt
@@ -82,6 +95,11 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit --requirement requirements.txt --format=json --output=pip-audit-results.json || true
+
+      - name: Run Safety check
+        run: |
+          pip install safety
+          safety check --file requirements.txt --json --output safety-results.json || true
 
       - name: Check for critical vulnerabilities
         run: |
@@ -98,7 +116,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dependency-audit-results
-          path: pip-audit-results.json
+          path: |
+            pip-audit-results.json
+            safety-results.json
           retention-days: 30
 
   bandit-sast:
@@ -118,7 +138,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Sync dependencies
         run: uv sync --extra server --extra scheduler --extra speech
@@ -144,10 +164,56 @@ jobs:
           path: bandit-results.json
           retention-days: 14
 
+  container-scan:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: []
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.cityos
+          push: false
+          load: true
+          tags: cityosjarvis:scan
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: 'cityosjarvis:scan'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: |
+            trivy-fs-results.sarif
+            trivy-image-results.sarif
+          retention-days: 14
+
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [secret-scanning, dependency-audit, bandit-sast]
+    needs: [secret-scanning, dependency-audit, bandit-sast, container-scan]
     if: always()
 
     steps:
@@ -159,3 +225,4 @@ jobs:
           echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Dependency Audit | ${{ needs.dependency-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SAST (Bandit) | ${{ needs.bandit-sast.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Scan | ${{ needs.container-scan.result }} |" >> $GITHUB_STEP_SUMMARY

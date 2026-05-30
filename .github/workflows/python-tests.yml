@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
   UV_VERSION: "0.6.x"
 
 jobs:
@@ -40,15 +40,12 @@ jobs:
 
       - name: Ruff check
         run: uv run ruff check src tests --output-format=github
-        continue-on-error: true
 
       - name: Ruff format check
         run: uv run ruff format --check src tests
-        continue-on-error: true
 
       - name: Pyright type check
         run: uv run pyright src/openjarvis/cityos
-        continue-on-error: true
 
   unit-tests:
     name: Unit Tests
@@ -73,7 +70,7 @@ jobs:
         run: uv sync --extra server --extra scheduler --extra speech
 
       - name: Run unit tests
-        run: uv run pytest tests/cityos/test_auth.py tests/cityos/test_tenant.py tests/cityos/test_compliance.py tests/cityos/test_audit.py -v --tb=short --junitxml=test-results/unit-results.xml
+        run: uv run pytest tests/cityos/test_auth.py tests/cityos/test_tenant.py tests/cityos/test_compliance.py tests/cityos/test_audit.py tests/cityos/test_tools.py -v --tb=short --junitxml=test-results/unit-results.xml
         env:
           CITYOS_JWT_SECRET: ci-jwt-secret-32-chars-minimum!!
           CITYOS_TENANT_HEADER: X-CityOS-Tenant-Id

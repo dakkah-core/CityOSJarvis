@@ -1,0 +1,127 @@
+version: "3.8"
+
+# Local staging environment for E2E testing.
+# Spins up all dependencies needed to run Playwright tests locally.
+#
+# Usage:
+#   docker compose -f deploy/docker/docker-compose.staging.yml up -d
+#   pnpm test:e2e:staging
+
+services:
+  cityosjarvis-staging:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.cityos
+      args:
+        BASE_IMAGE: python:3.13-slim
+        ENABLE_TTS: "true"
+    image: cityosjarvis:staging
+    container_name: cityosjarvis-staging
+    ports:
+      - "18000:8000"
+    environment:
+      - OPENJARVIS_API_KEY=staging-key
+      - CITYOS_AUDIT_DIR=/var/log/cityosjarvis
+      - CITYOS_LOG_LEVEL=INFO
+      - ENABLE_TTS=true
+      - DATABASE_URL=postgresql://jarvis:jarvis@postgres-staging:5432/jarvis
+      - REDIS_URL=redis://redis-staging:6379/0
+      - MOCK_MODE=true
+    volumes:
+      - staging-audit:/var/log/cityosjarvis
+    networks:
+      - cityos-staging
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-staging:
+    image: postgres:16-alpine
+    container_name: cityosjarvis-postgres-staging
+    environment:
+      - POSTGRES_USER=jarvis
+      - POSTGRES_PASSWORD=jarvis
+      - POSTGRES_DB=jarvis
+    volumes:
+      - staging-postgres:/var/lib/postgresql/data
+    networks:
+      - cityos-staging
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-staging:
+    image: redis:7-alpine
+    container_name: cityosjarvis-redis-staging
+    networks:
+      - cityos-staging
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-twilio:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.mock-twilio
+    image: mock-twilio:staging
+    container_name: cityosjarvis-mock-twilio
+    ports:
+      - "15020:5020"
+    networks:
+      - cityos-staging
+    volumes:
+      - ./mock-twilio-responses:/app/responses:ro
+
+  mock-keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: cityosjarvis-mock-keycloak
+    command: start-dev --import-realm
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HTTP_PORT=8080
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+    networks:
+      - cityos-staging
+    ports:
+      - "18080:8080"
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.44.0-jammy
+    container_name: cityosjarvis-playwright
+    depends_on:
+      cityosjarvis-staging:
+        condition: service_healthy
+    environment:
+      - STAGING_URL=http://cityosjarvis-staging:8000
+      - CI=true
+    volumes:
+      - ../..:/app
+    working_dir: /app
+    networks:
+      - cityos-staging
+    command: npx playwright test tests/e2e/specs --config tests/e2e/playwright.staging.config.ts
+
+volumes:
+  staging-audit:
+  staging-postgres:
+
+networks:
+  cityos-staging:
+    driver: bridge

@@ -12,10 +12,10 @@ export default defineConfig({
   fullyParallel: false, // Sequential — rate limits + shared infra
   workers: 1,
   retries: 1,
-  timeout: 30_000,
+  timeout: 120_000, // Ollama local inference can take 30-60s for first load
   reporter: [["list"], ["html", { outputFolder: "../../e2e-reports/ai-stack" }]],
   use: {
-    baseURL: process.env.E2E_JARVIS_URL || "http://localhost:8000",
+    baseURL: process.env.E2E_JARVIS_URL || "http://127.0.0.1:8000",
     trace: "on-first-retry",
   },
   projects: [

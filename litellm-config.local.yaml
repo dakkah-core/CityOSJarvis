@@ -1,0 +1,77 @@
+# LiteLLM local test config — simplified, no Langfuse, localhost Ollama
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: azure-gpt-4o
+    litellm_params:
+      model: azure/gpt-4o
+      api_base: os.environ/AZURE_OPENAI_ENDPOINT
+      api_key: os.environ/AZURE_OPENAI_KEY
+      api_version: "2024-10-21"
+
+  - model_name: gemini-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro-preview-03-25
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: kimi-k2
+    litellm_params:
+      model: moonshot/kimi-k2-0711-preview
+      api_key: os.environ/MOONSHOT_API_KEY
+      api_base: https://api.moonshot.cn/v1
+
+  - model_name: kimi-lite
+    litellm_params:
+      model: moonshot/moonshot-v1-8k
+      api_key: os.environ/MOONSHOT_API_KEY
+      api_base: https://api.moonshot.cn/v1
+
+  - model_name: llama-local
+    litellm_params:
+      model: ollama/qwen2.5-coder:14b
+      api_base: http://localhost:11434
+
+  - model_name: embed-local
+    litellm_params:
+      model: ollama/qwen2.5-coder:14b
+      api_base: http://localhost:11434
+
+router_settings:
+  fallback:
+    - gpt-4o:
+        - claude-sonnet-4
+        - azure-gpt-4o
+        - kimi-k2
+        - llama-local
+    - gpt-4o-mini:
+        - claude-haiku
+        - gemini-pro
+        - kimi-lite
+        - llama-local
+
+  num_retries: 2
+  timeout: 30
+  retry_after: 1
+
+server:
+  port: 4000
+  host: "0.0.0.0"
+  master_key: os.environ/LITELLM_MASTER_KEY

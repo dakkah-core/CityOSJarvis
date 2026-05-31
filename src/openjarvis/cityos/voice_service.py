@@ -37,6 +37,7 @@ from openjarvis.core.types import Message, Role
 from .tenant import TenantContext, get_tenant_context
 from .compliance import ComplianceGate
 from .audit import CityOSAuditLogger
+from . import metrics as jarvis_metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/voice", tags=["voice"])
@@ -234,16 +235,37 @@ async def process_intent(
     params = body.get("parameters", {})
     session_id = body.get("sessionId", "")
     generate_audio = body.get("generateAudio", False)
+    tenant_id = tenant.tenant_id if tenant else "default"
 
     start_time = time.perf_counter()
 
     # Build natural language query from intent + params
     user_query = _intent_to_query(intent, params)
 
+    # Try Arabic parser first
+    from .voice_arabic import parse_arabic_intent
+    ar_result = parse_arabic_intent(user_query)
+    if ar_result and ar_result.confidence > 0.6:
+        intent = ar_result.intent
+        user_query = ar_result.normalized_text
+        if ar_result.entities:
+            params.update(ar_result.entities)
+
     # Compliance check
     classification = gate.classify(user_query)
     if not classification.allowed:
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency = time.perf_counter() - start_time
+        latency_ms = latency * 1000
+        lang = ar_result.language if ar_result else "en"
+        jarvis_metrics.VOICE_QUERIES.labels(
+            tenant_id=tenant_id, language=lang, intent=intent
+        ).inc()
+        jarvis_metrics.VOICE_DURATION.labels(
+            tenant_id=tenant_id, language=lang
+        ).observe(latency)
+        jarvis_metrics.VOICE_CONFIDENCE.labels(
+            tenant_id=tenant_id, language=lang
+        ).observe(0.0)
         audit.log(
             event="voice.intent.blocked",
             tenant=tenant,
@@ -287,10 +309,21 @@ async def process_intent(
         )
 
         response_text = agent_result["content"]
-        lang = _detect_language(response_text)
+        lang = ar_result.language if ar_result else _detect_language(response_text)
         ssml = _build_ssml(response_text)
 
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency = time.perf_counter() - start_time
+        latency_ms = latency * 1000
+
+        jarvis_metrics.VOICE_QUERIES.labels(
+            tenant_id=tenant_id, language=lang, intent=intent
+        ).inc()
+        jarvis_metrics.VOICE_DURATION.labels(
+            tenant_id=tenant_id, language=lang
+        ).observe(latency)
+        jarvis_metrics.VOICE_CONFIDENCE.labels(
+            tenant_id=tenant_id, language=lang
+        ).observe(ar_result.confidence if ar_result else 0.8)
 
         audit.log(
             event="voice.intent.success",
@@ -327,7 +360,12 @@ async def process_intent(
         raise
     except Exception as e:
         logger.exception("Voice intent processing failed")
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency = time.perf_counter() - start_time
+        latency_ms = latency * 1000
+        lang = ar_result.language if ar_result else "en"
+        jarvis_metrics.VOICE_QUERIES.labels(
+            tenant_id=tenant_id, language=lang, intent="error"
+        ).inc()
         audit.log(
             event="voice.intent.error",
             tenant=tenant,

@@ -41,17 +41,18 @@ class PromptGuard:
     BLOCK_PATTERNS: list[tuple[str, float]] = [
         # English jailbreaks
         (r"ignore\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions|prompts)", 1.0),
-        (r"ignore\s+(?:the\s+)?(?:above|previous)\s+(?:instructions?|prompts?)", 1.0),
+        (r"ignore\s+(?:the\s+)?(?:above|previous)\s+(?:instructions?|prompts?|guidelines?)", 1.0),
         (r"disregard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions|prompts)", 1.0),
         (r"forget\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions|prompts)", 1.0),
         (r"you\s+are\s+now\s+(?:in\s+)?(?:DAN|dan|jailbreak|developer)\s+mode", 1.0),
         (r"DAN\s+mode\s+(?:enabled|activated|on)", 1.0),
         (r"(?:do\s+anything\s+now|DAN)\s*[:\-]", 1.0),
+        (r"(?:enable|activate|turn\s+on)\s+(?:developer|admin|root|system)\s+mode", 1.0),
         (r"(?:developer|admin|root|system)\s+mode\s*(?:enabled|activated|on)", 1.0),
         (r"simulate\s+(?:being|acting\s+as)\s+(?:DAN|an?\s+unrestricted)\s+(?:AI|model)", 1.0),
         (r"(?:hypothetically|theoretically|imagine)\s+.*(?:no\s+restrictions|no\s+limits|unfiltered)", 0.9),
         (r"(?:pretend|act\s+as\s+if)\s+.*(?:no\s+ethical|no\s+safety|no\s+content)\s+(?:guidelines|restrictions|filters)", 0.9),
-        (r"(?:bypass|circumvent|override)\s+(?:safety|content|ethical)\s+(?:filters|guidelines|restrictions)", 0.95),
+        (r"(?:bypass|circumvent|override)\s+(?:content\s+)?(?:safety|ethical)?\s*(?:filters|guidelines|restrictions)", 0.95),
         (r"(?:new|fresh|clean)\s+(?:instructions|prompt|context)\s*[:\-]", 0.85),
         (r"\[\s*(?:system|admin|developer)\s*\]\s*[:\-]", 0.9),
         (r"<\s*(?:system|admin|developer)\s*>\s*[:\-]", 0.9),
@@ -85,7 +86,7 @@ class PromptGuard:
     # Warning patterns (log but allow with elevated monitoring)
     WARN_PATTERNS: list[tuple[str, float]] = [
         (r"(?:write|generate|create)\s+.*(?:malware|virus|trojan|ransomware|exploit)", 0.7),
-        (r"(?:how\s+to|steps\s+to)\s+.*(?:hack|crack|bypass|exploit)\s+.*(?:security|password|auth)", 0.7),
+        (r"(?:how\s+to|steps\s+to)\s+.*(?:hack|crack|bypass|exploit)\s+.*(?:security|password|auth|network|system)", 0.7),
         (r"(?:fake|forged|counterfeit)\s+.*(?:ID|passport|document|certificate)", 0.6),
         (r"(?:steal|theft|fraud|scam|phishing)\s+.*(?:money|data|identity|credentials)", 0.6),
         (r"(?:bomb|weapon|explosive|poison|toxin)\s+.*(?:make|build|create|recipe)", 0.8),

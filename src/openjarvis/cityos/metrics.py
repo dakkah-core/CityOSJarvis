@@ -5,6 +5,11 @@ Exposes:
 - Request latency histogram
 - Active connections gauge
 - Compliance gate results counter
+- Chat metrics (tokens, conversations, messages)
+- Voice metrics (queries, languages, duration)
+- Tool execution metrics (calls, latency, errors)
+- LLM provider health (up/down, fallback activations)
+- Prompt guard metrics (blocked, warned, allowed)
 """
 
 from __future__ import annotations
@@ -15,7 +20,8 @@ from typing import Callable
 from fastapi import Request, Response
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
-# Request metrics
+# ── HTTP Request metrics ──────────────────────────────────────────────────────
+
 REQUEST_COUNT = Counter(
     "cityosjarvis_requests_total",
     "Total requests",
@@ -34,19 +40,153 @@ ACTIVE_CONNECTIONS = Gauge(
     "Number of active connections",
 )
 
-# Compliance metrics
+# ── Chat metrics ──────────────────────────────────────────────────────────────
+
+CHAT_REQUESTS = Counter(
+    "cityosjarvis_chat_requests_total",
+    "Total chat requests",
+    ["tenant_id", "agent_id", "model"],
+)
+
+CHAT_TOKENS = Histogram(
+    "cityosjarvis_chat_tokens_used",
+    "Tokens used per chat completion",
+    ["tenant_id", "model"],
+    buckets=[10, 50, 100, 250, 500, 1000, 2000, 4000, 8000],
+)
+
+CHAT_MESSAGES = Counter(
+    "cityosjarvis_chat_messages_total",
+    "Total chat messages sent/received",
+    ["tenant_id", "role"],
+)
+
+CONVERSATIONS_ACTIVE = Gauge(
+    "cityosjarvis_conversations_active",
+    "Number of active conversations",
+    ["tenant_id"],
+)
+
+# ── Voice metrics ─────────────────────────────────────────────────────────────
+
+VOICE_QUERIES = Counter(
+    "cityosjarvis_voice_queries_total",
+    "Total voice queries",
+    ["tenant_id", "language", "intent"],
+)
+
+VOICE_DURATION = Histogram(
+    "cityosjarvis_voice_duration_seconds",
+    "Voice query duration",
+    ["tenant_id", "language"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0],
+)
+
+VOICE_CONFIDENCE = Histogram(
+    "cityosjarvis_voice_confidence",
+    "Voice recognition confidence",
+    ["tenant_id", "language"],
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ── Tool execution metrics ────────────────────────────────────────────────────
+
+TOOL_CALLS = Counter(
+    "cityosjarvis_tool_calls_total",
+    "Total tool calls",
+    ["tenant_id", "tool_name", "agent_id", "status"],
+)
+
+TOOL_LATENCY = Histogram(
+    "cityosjarvis_tool_duration_seconds",
+    "Tool execution duration",
+    ["tenant_id", "tool_name"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+)
+
+# ── LLM Provider metrics ──────────────────────────────────────────────────────
+
+PROVIDER_HEALTH = Gauge(
+    "cityosjarvis_provider_up",
+    "LLM provider health (1 = up, 0 = down)",
+    ["provider", "model"],
+)
+
+PROVIDER_FALLBACKS = Counter(
+    "cityosjarvis_provider_fallbacks_total",
+    "Total fallback activations",
+    ["from_provider", "to_provider", "reason"],
+)
+
+PROVIDER_LATENCY = Histogram(
+    "cityosjarvis_provider_latency_seconds",
+    "LLM provider response latency",
+    ["provider", "model"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0],
+)
+
+PROVIDER_ERRORS = Counter(
+    "cityosjarvis_provider_errors_total",
+    "LLM provider errors",
+    ["provider", "model", "error_type"],
+)
+
+# ── Prompt Guard metrics ──────────────────────────────────────────────────────
+
+PROMPT_GUARD_SCANS = Counter(
+    "cityosjarvis_prompt_guard_scans_total",
+    "Total prompt guard scans",
+    ["tenant_id", "action"],
+)
+
+PROMPT_GUARD_SCORE = Histogram(
+    "cityosjarvis_prompt_guard_risk_score",
+    "Prompt guard risk score distribution",
+    ["tenant_id"],
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ── Compliance metrics ────────────────────────────────────────────────────────
+
 COMPLIANCE_CHECKS = Counter(
     "cityosjarvis_compliance_checks_total",
     "Total compliance checks",
     ["result", "category"],
 )
 
-# Chat metrics
-CHAT_TOKENS = Histogram(
-    "cityosjarvis_chat_tokens_used",
-    "Tokens used per chat completion",
-    ["model"],
-    buckets=[10, 50, 100, 250, 500, 1000, 2000, 4000, 8000],
+PII_REDACTIONS = Counter(
+    "cityosjarvis_pii_redactions_total",
+    "Total PII redactions",
+    ["tenant_id", "pii_type"],
+)
+
+# ── Storage metrics ───────────────────────────────────────────────────────────
+
+STORAGE_UPLOADS = Counter(
+    "cityosjarvis_storage_uploads_total",
+    "Total file uploads",
+    ["tenant_id", "purpose", "fallback"],
+)
+
+STORAGE_DOWNLOADS = Counter(
+    "cityosjarvis_storage_downloads_total",
+    "Total file downloads",
+    ["tenant_id", "purpose"],
+)
+
+# ── Search metrics ────────────────────────────────────────────────────────────
+
+SEARCH_QUERIES = Counter(
+    "cityosjarvis_search_queries_total",
+    "Total search queries",
+    ["tenant_id", "index_type"],
+)
+
+SEARCH_LATENCY = Histogram(
+    "cityosjarvis_search_duration_seconds",
+    "Search query duration",
+    ["tenant_id", "index_type"],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5],
 )
 
 

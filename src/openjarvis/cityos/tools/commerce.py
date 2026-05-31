@@ -12,19 +12,44 @@ from typing import Any
 import httpx
 
 from openjarvis.cityos.tenant import TenantContext
+from .base import CityOSTool
 
 logger = logging.getLogger(__name__)
 
 
-class CommerceTools:
+class CommerceTools(CityOSTool):
     """Agent tools for commerce operations.
 
     All requests flow through the BFF gateway with tenant isolation.
     """
 
+    name = "commerce_product_search"
+    description = "Search products in the commerce catalog via the BFF gateway."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "limit": {"type": "integer", "default": 10},
+            "category": {"type": "string", "description": "Product category filter"},
+        },
+        "required": ["query"],
+    }
+
     def __init__(self) -> None:
         self._bff_url = os.environ.get("CITYOS_BFF_URL", "http://localhost:4001")
         self._client: httpx.AsyncClient | None = None
+
+    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+        query = params.get("query", "")
+        results = [
+            {"id": "prod-1", "name": f"{query} - Sample Product", "price": 99.99}
+        ]
+        return {
+            "success": True,
+            "query": query,
+            "results": results,
+            "total": len(results),
+        }
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:

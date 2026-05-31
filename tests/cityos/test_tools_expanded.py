@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from openjarvis.cityos.tools import (
-    GovernanceTool,
-    CommerceTool,
+    GovernanceTools,
+    CommerceTools,
     HealthcareTool,
     TransportationTool,
-    FleetTool,
+    FleetTools,
     PublicSafetyTool,
 )
 
@@ -18,11 +18,11 @@ class TestToolSpecs:
     """Test tool specification validation."""
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_tool_has_name(self, tool_class) -> None:
@@ -31,11 +31,11 @@ class TestToolSpecs:
         assert isinstance(tool.name, str)
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_tool_has_description(self, tool_class) -> None:
@@ -45,11 +45,11 @@ class TestToolSpecs:
         assert len(tool.description) > 10
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_tool_has_parameters(self, tool_class) -> None:
@@ -59,11 +59,11 @@ class TestToolSpecs:
         assert tool.parameters["type"] == "object"
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_get_spec_format(self, tool_class) -> None:
@@ -78,12 +78,12 @@ class TestToolExecution:
     """Test tool execution with various inputs."""
 
     def test_governance_missing_param(self) -> None:
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         result = tool.run({})  # Missing permit_id
         assert "success" in result
 
     def test_commerce_pagination_params(self) -> None:
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run({"query": "test", "limit": 50})
         assert result["success"]
         assert "results" in result
@@ -101,7 +101,7 @@ class TestToolExecution:
             assert result["success"], f"Failed for {mode}"
 
     def test_fleet_vehicle_id(self) -> None:
-        tool = FleetTool()
+        tool = FleetTools()
         result = tool.run({"vehicle_id": "VH-TEST-001"})
         assert result["success"]
         assert "vehicle_id" in result
@@ -118,11 +118,11 @@ class TestToolExecution:
 
     def test_all_tools_with_tenant_id(self) -> None:
         tools = [
-            GovernanceTool(),
-            CommerceTool(),
+            GovernanceTools(),
+            CommerceTools(),
             HealthcareTool(),
             TransportationTool(),
-            FleetTool(),
+            FleetTools(),
             PublicSafetyTool(),
         ]
         for tool in tools:
@@ -131,11 +131,11 @@ class TestToolExecution:
 
     def test_all_tools_without_tenant_id(self) -> None:
         tools = [
-            GovernanceTool(),
-            CommerceTool(),
+            GovernanceTools(),
+            CommerceTools(),
             HealthcareTool(),
             TransportationTool(),
-            FleetTool(),
+            FleetTools(),
             PublicSafetyTool(),
         ]
         for tool in tools:
@@ -147,11 +147,11 @@ class TestToolResultStructure:
     """Verify tool results have consistent structure."""
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_result_has_success_key(self, tool_class) -> None:
@@ -161,11 +161,11 @@ class TestToolResultStructure:
         assert isinstance(result["success"], bool)
 
     @pytest.mark.parametrize("tool_class", [
-        GovernanceTool,
-        CommerceTool,
+        GovernanceTools,
+        CommerceTools,
         HealthcareTool,
         TransportationTool,
-        FleetTool,
+        FleetTools,
         PublicSafetyTool,
     ])
     def test_result_is_json_serializable(self, tool_class) -> None:

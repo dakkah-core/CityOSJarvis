@@ -5,33 +5,33 @@ from __future__ import annotations
 import pytest
 
 from openjarvis.cityos.tools import (
-    GovernanceTool,
-    CommerceTool,
+    GovernanceTools,
+    CommerceTools,
     HealthcareTool,
     TransportationTool,
-    FleetTool,
+    FleetTools,
     PublicSafetyTool,
 )
 
 
-class TestGovernanceTool:
+class TestGovernanceTools:
     def test_permit_lookup_returns_status(self):
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         result = tool.run({"permit_id": "PERM-2024-001"})
         assert result["success"] is True
         assert result["permit_id"] == "PERM-2024-001"
         assert "status" in result
 
     def test_spec_has_required_fields(self):
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         spec = tool.get_spec()
         assert spec["function"]["name"] == "governance_permit_lookup"
         assert "permit_id" in spec["function"]["parameters"]["properties"]
 
 
-class TestCommerceTool:
+class TestCommerceTools:
     def test_product_search_returns_results(self):
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run({"query": "laptop"})
         assert result["success"] is True
         assert result["query"] == "laptop"
@@ -63,9 +63,9 @@ class TestTransportationTool:
         assert len(result["routes"]) > 0
 
 
-class TestFleetTool:
+class TestFleetTools:
     def test_vehicle_status_returns_location(self):
-        tool = FleetTool()
+        tool = FleetTools()
         result = tool.run({"vehicle_id": "VH-001"})
         assert result["success"] is True
         assert "location" in result

@@ -6,11 +6,11 @@ import pytest
 
 from openjarvis.cityos.tenant import TenantContext
 from openjarvis.cityos.tools import (
-    GovernanceTool,
-    CommerceTool,
+    GovernanceTools,
+    CommerceTools,
     HealthcareTool,
     TransportationTool,
-    FleetTool,
+    FleetTools,
     PublicSafetyTool,
 )
 
@@ -25,11 +25,11 @@ def tenant() -> TenantContext:
     )
 
 
-class TestGovernanceTool:
+class TestGovernanceTools:
     """Test governance permit lookup tool end-to-end."""
 
     def test_permit_lookup_success(self, tenant: TenantContext) -> None:
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         result = tool.run(
             {"permit_id": "PERM-2024-001"},
             tenant_id=tenant.tenant_id,
@@ -40,7 +40,7 @@ class TestGovernanceTool:
         assert "status" in result
 
     def test_permit_lookup_includes_tenant(self, tenant: TenantContext) -> None:
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         result = tool.run(
             {"permit_id": "PERM-001"},
             tenant_id=tenant.tenant_id,
@@ -49,18 +49,18 @@ class TestGovernanceTool:
         assert result["success"] is True
 
     def test_permit_lookup_missing_id(self) -> None:
-        tool = GovernanceTool()
+        tool = GovernanceTools()
         result = tool.run({})
 
         # Should handle missing param gracefully
         assert "success" in result
 
 
-class TestCommerceTool:
+class TestCommerceTools:
     """Test commerce product search tool end-to-end."""
 
     def test_product_search_success(self, tenant: TenantContext) -> None:
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run(
             {"query": "hot drinks", "limit": 10},
             tenant_id=tenant.tenant_id,
@@ -71,7 +71,7 @@ class TestCommerceTool:
         assert result["total"] >= 0
 
     def test_product_search_default_limit(self, tenant: TenantContext) -> None:
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run(
             {"query": "electronics"},
             tenant_id=tenant.tenant_id,
@@ -81,7 +81,7 @@ class TestCommerceTool:
         assert isinstance(result["results"], list)
 
     def test_product_search_with_category(self, tenant: TenantContext) -> None:
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run(
             {"query": "food", "category": "grocery"},
             tenant_id=tenant.tenant_id,
@@ -178,11 +178,11 @@ class TestTransportationTool:
             assert "fare_sar" in result["routes"][0]
 
 
-class TestFleetTool:
+class TestFleetTools:
     """Test fleet logistics tool."""
 
     def test_vehicle_status(self, tenant: TenantContext) -> None:
-        tool = FleetTool()
+        tool = FleetTools()
         result = tool.run(
             {"vehicle_id": "VH-001"},
             tenant_id=tenant.tenant_id,
@@ -192,7 +192,7 @@ class TestFleetTool:
         assert "vehicle_id" in result
 
     def test_delivery_tracking(self, tenant: TenantContext) -> None:
-        tool = FleetTool()
+        tool = FleetTools()
         result = tool.run(
             {"tracking_number": "TRK-12345"},
             tenant_id=tenant.tenant_id,
@@ -230,11 +230,11 @@ class TestToolRegistryIntegration:
 
     def test_all_tools_have_specs(self) -> None:
         tools = [
-            GovernanceTool(),
-            CommerceTool(),
+            GovernanceTools(),
+            CommerceTools(),
             HealthcareTool(),
             TransportationTool(),
-            FleetTool(),
+            FleetTools(),
             PublicSafetyTool(),
         ]
 
@@ -248,11 +248,11 @@ class TestToolRegistryIntegration:
 
     def test_all_tool_names_are_unique(self) -> None:
         tools = [
-            GovernanceTool(),
-            CommerceTool(),
+            GovernanceTools(),
+            CommerceTools(),
             HealthcareTool(),
             TransportationTool(),
-            FleetTool(),
+            FleetTools(),
             PublicSafetyTool(),
         ]
 
@@ -261,7 +261,7 @@ class TestToolRegistryIntegration:
 
     def test_tool_execution_with_none_tenant(self) -> None:
         """Tools should work even without tenant context."""
-        tool = CommerceTool()
+        tool = CommerceTools()
         result = tool.run({"query": "test"}, tenant_id=None)
 
         assert result["success"] is True

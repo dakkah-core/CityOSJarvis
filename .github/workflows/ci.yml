@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [cityos/main]
+  pull_request:
+    branches: [cityos/main]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Run tests
+        run: uv run pytest --tb=short -q
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+      - name: Upload coverage
+        if: github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports:
+          - 11434:11434
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Start mock LiteLLM proxy
+        run: |
+          uv run python litellm-mock-proxy.py &
+          sleep 5
+      - name: Install Playwright
+        run: npx playwright install chromium
+      - name: Run E2E tests
+        run: npx playwright test e2e/ai-stack/
+        env:
+          CITYOSJARVIS_LLM_MODE: ollama
+          OLLAMA_HOST: http://localhost:11434
+          LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -f Dockerfile.cityos -t cityosjarvis:test .
+      - name: Test Docker image
+        run: docker run --rm cityosjarvis:test uv run pytest --tb=short -q

@@ -67,6 +67,13 @@ CONVERSATIONS_ACTIVE = Gauge(
     ["tenant_id"],
 )
 
+CHAT_DURATION = Histogram(
+    "cityosjarvis_chat_duration_seconds",
+    "Chat completion duration",
+    ["tenant_id", "model", "stream"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
+)
+
 # ── Voice metrics ─────────────────────────────────────────────────────────────
 
 VOICE_QUERIES = Counter(

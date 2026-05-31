@@ -27,6 +27,7 @@ from openjarvis.server.models import (
 from openjarvis.cityos.compliance import ComplianceGate
 from openjarvis.cityos.audit import CityOSAuditLogger
 from openjarvis.cityos.tenant import get_tenant_context
+from openjarvis.cityos import metrics as jarvis_metrics
 
 router = APIRouter()
 _compliance_gate = ComplianceGate()
@@ -59,6 +60,16 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
     model = request_body.model
     tenant = get_tenant_context(request)
     start_time = time.perf_counter()
+    tenant_id = tenant.tenant_id if tenant else "default"
+
+    # Record chat metrics
+    jarvis_metrics.CHAT_REQUESTS.labels(
+        tenant_id=tenant_id, agent_id="default", model=model
+    ).inc()
+    user_messages = sum(1 for m in request_body.messages if m.role == "user")
+    jarvis_metrics.CHAT_MESSAGES.labels(
+        tenant_id=tenant_id, role="user"
+    ).inc(user_messages)
 
     # Extract last user message for compliance check
     last_user_message = ""
@@ -185,7 +196,11 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
             else:
                 response = await _handle_stream(engine, model, request_body, complexity_info)
 
-            latency_ms = (time.perf_counter() - start_time) * 1000
+            latency = time.perf_counter() - start_time
+            latency_ms = latency * 1000
+            jarvis_metrics.CHAT_DURATION.labels(
+                tenant_id=tenant_id, model=model, stream="True"
+            ).observe(latency)
             _audit_logger.log(
                 event="chat.completion",
                 tenant=tenant,
@@ -209,7 +224,18 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
                 complexity_info=complexity_info,
             )
 
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency = time.perf_counter() - start_time
+        latency_ms = latency * 1000
+        jarvis_metrics.CHAT_DURATION.labels(
+            tenant_id=tenant_id, model=model, stream="False"
+        ).observe(latency)
+        total_tokens = 0
+        if hasattr(response, "usage") and response.usage:
+            total_tokens = response.usage.total_tokens
+        if total_tokens:
+            jarvis_metrics.CHAT_TOKENS.labels(
+                tenant_id=tenant_id, model=model
+            ).observe(total_tokens)
         _audit_logger.log(
             event="chat.completion",
             tenant=tenant,
@@ -225,7 +251,11 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
     except HTTPException:
         raise
     except Exception as exc:
-        latency_ms = (time.perf_counter() - start_time) * 1000
+        latency = time.perf_counter() - start_time
+        latency_ms = latency * 1000
+        jarvis_metrics.CHAT_DURATION.labels(
+            tenant_id=tenant_id, model=model, stream="False"
+        ).observe(latency)
         _audit_logger.log(
             event="chat.completion.error",
             tenant=tenant,

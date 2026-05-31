@@ -474,13 +474,23 @@ async def speech_to_text(
 
         os.unlink(temp_path)
 
-        return JSONResponse(
-            {
-                "text": text,
-                "language": info.language,
-                "probability": info.language_probability,
-            }
-        )
+        response_payload: dict[str, Any] = {
+            "text": text,
+            "language": info.language,
+            "probability": info.language_probability,
+        }
+
+        # Parse Arabic intent when language is Arabic
+        if info.language == "ar" or language == "ar":
+            from .voice_arabic import parse_arabic_intent
+            ar_result = parse_arabic_intent(text)
+            if ar_result:
+                response_payload["intent"] = ar_result.intent
+                response_payload["entities"] = ar_result.entities
+                response_payload["confidence"] = ar_result.confidence
+                response_payload["dialect"] = ar_result.language
+
+        return JSONResponse(response_payload)
 
     except Exception as e:
         logger.exception("STT failed")

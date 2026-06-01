@@ -476,6 +476,9 @@ async def _handle_stream(
                 except Exception:
                     pass
                 if _use_local_fallback:
+                    jarvis_metrics.PROVIDER_FALLBACKS.labels(
+                        from_provider="cloud", to_provider="local", reason="misroute"
+                    ).inc()
                     token_iter = stream_local(
                         model, messages, req.temperature, req.max_tokens
                     )

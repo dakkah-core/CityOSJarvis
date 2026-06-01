@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from openjarvis.core.events import EventBus, EventType
 from openjarvis.core.types import ToolCall, ToolResult
+from openjarvis.cityos import metrics as jarvis_metrics
 
 # ---------------------------------------------------------------------------
 # ToolSpec — metadata describing a tool's interface
@@ -266,6 +267,12 @@ class ToolExecutor:
         latency = time.time() - t0
         result.latency_seconds = latency
         result.metadata["arguments"] = params
+        try:
+            jarvis_metrics.TOOL_LATENCY.labels(
+                tenant_id="default", tool_name=tool_call.name
+            ).observe(latency)
+        except Exception:
+            pass
 
         # Auto-detect taints in results
         if result.success:

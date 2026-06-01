@@ -78,8 +78,8 @@ jobs:
               git checkout --ours .
               git add -A
             fi
-            # Complete the merge
-            git commit -m "chore: sync upstream $(date +%Y-%m-%d)"
+            # Complete the merge (use merge --continue to properly finish the merge commit)
+            GIT_EDITOR=true git merge --continue || git -c core.editor=true merge --continue
           fi
           git push origin "$BRANCH" --force
 

@@ -64,23 +64,20 @@ jobs:
           BRANCH="sync/upstream-$(date +%Y%m%d)"
           echo "branch=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
-          # Allow unrelated histories (fork diverged significantly)
-          if git merge upstream/main --no-edit --allow-unrelated-histories -X ours; then
-            git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
-          else
-            # Resolve CityOS-specific files by keeping ours
-            git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos scripts/install/*.sh src/openjarvis/agents/hybrid/scripts/*.sh || true
+          # Merge without auto-commit so we can resolve conflicts manually
+          git merge upstream/main --no-commit --allow-unrelated-histories -X ours || true
+          # Resolve CityOS-specific files by keeping ours
+          git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos scripts/install/*.sh src/openjarvis/agents/hybrid/scripts/*.sh || true
+          git add -A
+          # Resolve any remaining conflicts by keeping ours
+          UNMERGED=$(git diff --cached --diff-filter=U --name-only)
+          if [ -n "$UNMERGED" ]; then
+            echo "Remaining unmerged files: $UNMERGED"
+            git checkout --ours .
             git add -A
-            # Resolve any remaining conflicts by keeping ours
-            UNMERGED=$(git diff --cached --diff-filter=U --name-only)
-            if [ -n "$UNMERGED" ]; then
-              echo "Remaining unmerged files: $UNMERGED"
-              git checkout --ours .
-              git add -A
-            fi
-            # Complete the merge (use merge --continue to properly finish the merge commit)
-            GIT_EDITOR=true git merge --continue || git -c core.editor=true merge --continue
           fi
+          # Commit the merge result
+          git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
           git push origin "$BRANCH" --force
 
       - name: Create Pull Request

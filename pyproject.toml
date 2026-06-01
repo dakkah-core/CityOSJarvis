@@ -37,7 +37,7 @@ dependencies = [
     "tomlkit>=0.12",
     "websockets>=15.0.1",
     "prometheus-client>=0.25.0",
-    "python-jose>=3.5.0",
+    "pyjwt>=2.8.0",
     "starlette>=1.2.0",
     "fastapi>=0.136.3",
 ]

@@ -102,14 +102,18 @@ class TestKeycloakValidation:
 
     @pytest.mark.asyncio
     async def test_expired_token(self, middleware):
-        from jose import jwt as jose_jwt
+        import jwt as pyjwt_lib
+        from jwt import PyJWKSet
 
         request = MagicMock()
         request.headers = {"Authorization": "Bearer expired-token"}
 
+        mock_jwk_set = MagicMock()
+        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
         with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-            with patch("openjarvis.cityos.auth.jwt.decode", side_effect=jose_jwt.ExpiredSignatureError):
-                result = await middleware._validate_keycloak(request)
+            with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
+                with patch("openjarvis.cityos.auth.pyjwt.decode", side_effect=pyjwt_lib.ExpiredSignatureError):
+                    result = await middleware._validate_keycloak(request)
 
         assert result is not None
         assert result.status_code == 401
@@ -117,14 +121,18 @@ class TestKeycloakValidation:
 
     @pytest.mark.asyncio
     async def test_invalid_signature(self, middleware):
-        from jose import jwt as jose_jwt
+        import jwt as pyjwt_lib
+        from jwt import PyJWKSet
 
         request = MagicMock()
         request.headers = {"Authorization": "Bearer bad-token"}
 
+        mock_jwk_set = MagicMock()
+        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
         with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-            with patch("openjarvis.cityos.auth.jwt.decode", side_effect=jose_jwt.JWTError("signature failed")):
-                result = await middleware._validate_keycloak(request)
+            with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
+                with patch("openjarvis.cityos.auth.pyjwt.decode", side_effect=pyjwt_lib.InvalidTokenError("signature failed")):
+                    result = await middleware._validate_keycloak(request)
 
         assert result is not None
         assert result.status_code == 401
@@ -132,6 +140,8 @@ class TestKeycloakValidation:
 
     @pytest.mark.asyncio
     async def test_valid_token_sets_user(self, middleware):
+        from jwt import PyJWKSet
+
         request = MagicMock()
         request.headers = {
             "Authorization": "Bearer valid-token",
@@ -140,14 +150,17 @@ class TestKeycloakValidation:
         }
         request.state = MagicMock()
 
-        with patch("openjarvis.cityos.auth.jwt.decode", return_value={
+        mock_jwk_set = MagicMock()
+        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
+        with patch("openjarvis.cityos.auth.pyjwt.decode", return_value={
             "sub": "user-456",
             "preferred_username": "alice",
             "email": "alice@example.com",
             "realm_access": {"roles": ["city-admin"]},
         }):
             with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-                result = await middleware._validate_keycloak(request)
+                with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
+                    result = await middleware._validate_keycloak(request)
 
         assert result is None  # Success
         assert request.state.cityos_user["sub"] == "user-456"

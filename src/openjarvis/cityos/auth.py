@@ -11,7 +11,8 @@ import os
 from typing import Any
 
 import httpx
-from jose import jwt, exceptions as jwt_exceptions
+import jwt as pyjwt
+from jwt import PyJWKSet
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -84,24 +85,31 @@ class CityOSAuthMiddleware(BaseHTTPMiddleware):
 
         try:
             jwks = await self._get_jwks()
-            payload = jwt.decode(
+            jwks_set = PyJWKSet.from_dict(jwks)
+            signing_key = jwks_set.get_signing_key_from_jwt(token)
+            payload = pyjwt.decode(
                 token,
-                jwks,
+                signing_key.key,
                 algorithms=["RS256"],
                 audience="account",
                 issuer=f"{self._keycloak_url}/realms/{self._keycloak_realm}",
             )
-        except jwt_exceptions.ExpiredSignatureError:
+        except pyjwt.ExpiredSignatureError:
             return JSONResponse(
                 {"detail": "Token expired"},
                 status_code=401,
             )
-        except jwt_exceptions.JWTClaimsError as e:
+        except pyjwt.InvalidAudienceError as e:
             return JSONResponse(
-                {"detail": f"Invalid token claims: {e}"},
+                {"detail": f"Invalid token audience: {e}"},
                 status_code=401,
             )
-        except jwt_exceptions.JWTError as e:
+        except pyjwt.InvalidIssuerError as e:
+            return JSONResponse(
+                {"detail": f"Invalid token issuer: {e}"},
+                status_code=401,
+            )
+        except pyjwt.InvalidTokenError as e:
             return JSONResponse(
                 {"detail": f"Invalid token: {e}"},
                 status_code=401,

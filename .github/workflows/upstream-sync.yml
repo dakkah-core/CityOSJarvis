@@ -42,30 +42,55 @@ jobs:
           echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
           echo "Upstream is $BEHIND commits ahead"
 
+      - name: Clean stale sync branches
+        if: steps.check.outputs.commits_behind != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete sync branches older than 7 days that have no open PR
+          gh api repos/${{ github.repository }}/git/refs/heads --paginate \
+            | jq -r '.[] | select(.ref | startswith("refs/heads/sync/upstream-")) | .ref' \
+            | sed 's|refs/heads/||' | while read branch; do
+              pr_count=$(gh pr list --repo ${{ github.repository }} --head "$branch" --state open --json number | jq 'length')
+              if [ "$pr_count" -eq 0 ]; then
+                echo "Deleting stale branch: $branch"
+                gh api repos/${{ github.repository }}/git/refs/heads/$branch -X DELETE || true
+              fi
+            done
+
       - name: Create sync branch
         if: steps.check.outputs.commits_behind != '0'
         run: |
-          git checkout -b sync/upstream-$(date +%Y%m%d)
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          echo "branch=$BRANCH" >> $GITHUB_ENV
+          git checkout -b "$BRANCH"
           # Allow unrelated histories (fork diverged significantly)
           git merge upstream/main --no-edit --allow-unrelated-histories -X ours || true
           # Resolve any remaining shell-script conflicts by keeping ours
           git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos scripts/install/*.sh src/openjarvis/agents/hybrid/scripts/*.sh || true
           git add -A
           git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
-          git push origin sync/upstream-$(date +%Y%m%d)
+          git push origin "$BRANCH" --force
 
       - name: Create Pull Request
         if: steps.check.outputs.commits_behind != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create \
-            --title "chore: sync upstream $(date +%Y-%m-%d)" \
-            --body "Automated upstream sync from open-jarvis/OpenJarvis.\\n\\n- Commits behind: ${{ steps.check.outputs.commits_behind }}\\n- CityOS-specific files preserved (cityos/, Dockerfile.cityos)\\n\\nPlease review for breaking changes." \
-            --base cityos/main \
-            --head sync/upstream-$(date +%Y%m%d) \
-            --label "upstream-sync" \
-            || echo "PR may already exist"
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          # Check if PR already exists
+          EXISTING=$(gh pr list --repo ${{ github.repository }} --head "$BRANCH" --state open --json number | jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "PR already exists for $BRANCH"
+            gh pr list --repo ${{ github.repository }} --head "$BRANCH" --state open --json url | jq -r '.[].url'
+          else
+            gh pr create \
+              --title "chore: sync upstream $(date +%Y-%m-%d)" \
+              --body "Automated upstream sync from open-jarvis/OpenJarvis.\n\n- Commits behind: ${{ steps.check.outputs.commits_behind }}\n- CityOS-specific files preserved (cityos/, Dockerfile.cityos)\n\nPlease review for breaking changes." \
+              --base cityos/main \
+              --head "$BRANCH" \
+              --label "upstream-sync"
+          fi
 
       - name: No changes needed
         if: steps.check.outputs.commits_behind == '0'

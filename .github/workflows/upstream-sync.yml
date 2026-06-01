@@ -65,11 +65,22 @@ jobs:
           echo "branch=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
           # Allow unrelated histories (fork diverged significantly)
-          git merge upstream/main --no-edit --allow-unrelated-histories -X ours || true
-          # Resolve any remaining shell-script conflicts by keeping ours
-          git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos scripts/install/*.sh src/openjarvis/agents/hybrid/scripts/*.sh || true
-          git add -A
-          git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
+          if git merge upstream/main --no-edit --allow-unrelated-histories -X ours; then
+            git commit -m "chore: sync upstream $(date +%Y-%m-%d)" || true
+          else
+            # Resolve CityOS-specific files by keeping ours
+            git checkout --ours src/openjarvis/cityos/ tests/cityos/ deploy/docker/Dockerfile.cityos scripts/install/*.sh src/openjarvis/agents/hybrid/scripts/*.sh || true
+            git add -A
+            # Resolve any remaining conflicts by keeping ours
+            UNMERGED=$(git diff --cached --diff-filter=U --name-only)
+            if [ -n "$UNMERGED" ]; then
+              echo "Remaining unmerged files: $UNMERGED"
+              git checkout --ours .
+              git add -A
+            fi
+            # Complete the merge
+            git commit -m "chore: sync upstream $(date +%Y-%m-%d)"
+          fi
           git push origin "$BRANCH" --force
 
       - name: Create Pull Request

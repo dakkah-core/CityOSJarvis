@@ -165,6 +165,14 @@ class PromptGuard:
             len(matched),
         )
 
+        # Record prompt guard metrics
+        try:
+            from openjarvis.cityos.metrics import PROMPT_GUARD_SCANS, PROMPT_GUARD_SCORE
+            PROMPT_GUARD_SCANS.labels(tenant_id=tenant_id, action=action).inc()
+            PROMPT_GUARD_SCORE.labels(tenant_id=tenant_id).observe(max_score)
+        except Exception:
+            pass
+
         return PromptGuardResult(
             is_safe=is_safe,
             risk_score=max_score,

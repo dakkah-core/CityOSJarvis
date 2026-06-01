@@ -19,6 +19,7 @@ from openjarvis.engine._base import (
     messages_to_dicts,
 )
 from openjarvis.engine._stubs import StreamChunk
+from openjarvis.cityos import metrics as jarvis_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -928,6 +929,20 @@ class CloudEngine(InferenceEngine):
             ]
         return result
 
+    @staticmethod
+    def _provider_name(model: str) -> str:
+        if _is_codex_model(model):
+            return "codex"
+        if _is_openrouter_model(model):
+            return "openrouter"
+        if _is_minimax_model(model):
+            return "minimax"
+        if _is_anthropic_model(model):
+            return "anthropic"
+        if _is_google_model(model):
+            return "google"
+        return "openai"
+
     def generate(
         self,
         messages: Sequence[Message],
@@ -943,17 +958,33 @@ class CloudEngine(InferenceEngine):
             max_tokens=max_tokens,
             **kwargs,
         )
-        if _is_codex_model(model):
-            return self._generate_codex(messages, **kw)
-        if _is_openrouter_model(model):
-            return self._generate_openrouter(messages, **kw)
-        if _is_minimax_model(model):
-            return self._generate_minimax(messages, **kw)
-        if _is_anthropic_model(model):
-            return self._generate_anthropic(messages, **kw)
-        if _is_google_model(model):
-            return self._generate_google(messages, **kw)
-        return self._generate_openai(messages, **kw)
+        provider = self._provider_name(model)
+        t0 = time.monotonic()
+        try:
+            if _is_codex_model(model):
+                result = self._generate_codex(messages, **kw)
+            elif _is_openrouter_model(model):
+                result = self._generate_openrouter(messages, **kw)
+            elif _is_minimax_model(model):
+                result = self._generate_minimax(messages, **kw)
+            elif _is_anthropic_model(model):
+                result = self._generate_anthropic(messages, **kw)
+            elif _is_google_model(model):
+                result = self._generate_google(messages, **kw)
+            else:
+                result = self._generate_openai(messages, **kw)
+            elapsed = time.monotonic() - t0
+            jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(elapsed)
+            jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(1)
+            return result
+        except Exception as exc:
+            elapsed = time.monotonic() - t0
+            jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(elapsed)
+            jarvis_metrics.PROVIDER_ERRORS.labels(
+                provider=provider, model=model, error_type=type(exc).__name__
+            ).inc()
+            jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(0)
+            raise
 
     async def stream(
         self,

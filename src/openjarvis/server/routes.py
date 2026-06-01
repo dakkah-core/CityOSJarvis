@@ -317,6 +317,16 @@ def _handle_direct(
             }
             for tc in tool_calls
         ]
+        # Record tool metrics
+        try:
+            from openjarvis.cityos.metrics import TOOL_CALLS
+            for tc in tool_calls:
+                tool_name = tc.get("name", "unknown")
+                TOOL_CALLS.labels(
+                    tenant_id="default", tool_name=tool_name, agent_id="default", status="called"
+                ).inc()
+        except Exception:
+            pass
 
     return ChatCompletionResponse(
         model=model,

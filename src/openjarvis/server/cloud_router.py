@@ -16,6 +16,7 @@ from typing import Any, Sequence
 import httpx
 
 from openjarvis.core.types import Message
+from openjarvis.cityos import metrics as jarvis_metrics
 
 # ---------------------------------------------------------------------------
 # Key / provider detection
@@ -349,51 +350,59 @@ async def stream_cloud(
     max_tokens: int = 1024,
 ) -> AsyncIterator[str]:
     """Stream tokens from a cloud provider for the given model."""
-    provider = get_provider(model)
+    import time
 
-    if provider == "openai":
-        async for token in _stream_openai(model, messages, temperature, max_tokens):
-            yield token
-
-    elif provider == "anthropic":
-        async for token in _stream_anthropic(model, messages, temperature, max_tokens):
-            yield token
-
-    elif provider == "google":
-        async for token in _stream_google(model, messages, temperature, max_tokens):
-            yield token
-
-    elif provider == "openrouter":
-        keys = _load_keys()
-        api_key = keys.get("OPENROUTER_API_KEY", "")
-        if not api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY not set — add it in the Cloud Models tab"
+    provider = get_provider(model) or "unknown"
+    t0 = time.perf_counter()
+    first_token = True
+    try:
+        if provider == "openai":
+            token_iter = _stream_openai(model, messages, temperature, max_tokens)
+        elif provider == "anthropic":
+            token_iter = _stream_anthropic(model, messages, temperature, max_tokens)
+        elif provider == "google":
+            token_iter = _stream_google(model, messages, temperature, max_tokens)
+        elif provider == "openrouter":
+            keys = _load_keys()
+            api_key = keys.get("OPENROUTER_API_KEY", "")
+            if not api_key:
+                raise ValueError(
+                    "OPENROUTER_API_KEY not set — add it in the Cloud Models tab"
+                )
+            token_iter = _stream_openai(
+                model,
+                messages,
+                temperature,
+                max_tokens,
+                base_url="https://openrouter.ai/api/v1",
+                api_key_name="OPENROUTER_API_KEY",
             )
-        async for token in _stream_openai(
-            model,
-            messages,
-            temperature,
-            max_tokens,
-            base_url="https://openrouter.ai/api/v1",
-            api_key_name="OPENROUTER_API_KEY",
-        ):
-            yield token
+        elif provider == "minimax":
+            keys = _load_keys()
+            api_key = keys.get("MINIMAX_API_KEY", "")
+            if not api_key:
+                raise ValueError("MINIMAX_API_KEY not set — add it in the Cloud Models tab")
+            token_iter = _stream_openai(
+                model,
+                messages,
+                temperature,
+                max_tokens,
+                base_url="https://api.minimax.io/v1",
+                api_key_name="MINIMAX_API_KEY",
+            )
+        else:
+            raise ValueError(f"Unknown cloud provider for model: {model!r}")
 
-    elif provider == "minimax":
-        keys = _load_keys()
-        api_key = keys.get("MINIMAX_API_KEY", "")
-        if not api_key:
-            raise ValueError("MINIMAX_API_KEY not set — add it in the Cloud Models tab")
-        async for token in _stream_openai(
-            model,
-            messages,
-            temperature,
-            max_tokens,
-            base_url="https://api.minimax.io/v1",
-            api_key_name="MINIMAX_API_KEY",
-        ):
+        async for token in token_iter:
+            if first_token:
+                ttft = time.perf_counter() - t0
+                jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(ttft)
+                jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(1)
+                first_token = False
             yield token
-
-    else:
-        raise ValueError(f"Unknown cloud provider for model: {model!r}")
+    except Exception as exc:
+        jarvis_metrics.PROVIDER_ERRORS.labels(
+            provider=provider, model=model, error_type=type(exc).__name__
+        ).inc()
+        jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(0)
+        raise

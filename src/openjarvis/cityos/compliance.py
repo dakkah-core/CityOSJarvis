@@ -150,7 +150,13 @@ class ComplianceGate:
 
     def _redact(self, payload: str, pattern: re.Pattern[str]) -> str:
         """Replace matched sensitive data with [REDACTED]."""
-        return pattern.sub("[REDACTED]", payload)
+        redacted = pattern.sub("[REDACTED]", payload)
+        try:
+            from openjarvis.cityos.metrics import PII_REDACTIONS
+            PII_REDACTIONS.labels(tenant_id="default", pii_type="auto").inc()
+        except Exception:
+            pass
+        return redacted
 
     def _looks_like_secret(self, payload: str) -> bool:
         """Heuristic: long base64/hex strings may be secrets."""

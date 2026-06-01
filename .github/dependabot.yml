@@ -1,0 +1,86 @@
+version: 2
+updates:
+  # Core Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
+    groups:
+      core-dependencies:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "pydantic"
+          - "sqlalchemy"
+          - "alembic"
+          - "httpx"
+          - "cryptography"
+      optional-extras:
+        patterns:
+          - "vllm"
+          - "torch"
+          - "transformers"
+          - "litellm"
+          - "openai"
+          - "anthropic"
+          - "docker"
+          - "playwright"
+    ignore:
+      # Rust extensions are built from source; do not auto-bump
+      - dependency-name: "maturin"
+        update-types: ["version-update:semver-minor"]
+      # Pin Vue 2 until migration complete
+      - dependency-name: "vue"
+        versions: ["3.x"]
+
+  # Rust crates (optional extensions)
+  - package-ecosystem: "cargo"
+    directory: "/rust"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 3
+    groups:
+      rust-core:
+        patterns:
+          - "tokio"
+          - "serde"
+          - "axum"
+    ignore:
+      # Security patches only for Rust
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+
+  # Frontend (Tauri + Node)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 3
+
+  # WhatsApp bridge (Node)
+  - package-ecosystem: "npm"
+    directory: "/src/openjarvis/channels/whatsapp_baileys_bridge"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+
+  # Claude Code runner (Node)
+  - package-ecosystem: "npm"
+    directory: "/src/openjarvis/agents/claude_code_runner"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 3

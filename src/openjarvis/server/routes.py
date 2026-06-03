@@ -414,6 +414,42 @@ async def _handle_agent_stream(agent, bus, model, req):
     return await create_agent_stream(agent, bus, model, req)
 
 
+def _engine_chain_contains_id(engine, engine_ids: set[str]) -> bool:
+    """Return True if a wrapped engine chain contains one of *engine_ids*."""
+    stack = [engine]
+    seen: set[int] = set()
+    while stack:
+        current = stack.pop()
+        if current is None:
+            continue
+        current_id = id(current)
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+
+        if getattr(current, "engine_id", "") in engine_ids:
+            return True
+        for attr in ("_inner", "_engine", "engine"):
+            child = getattr(current, attr, None)
+            if child is not None:
+                stack.append(child)
+    return False
+
+
+def _should_use_direct_cloud_router(engine) -> bool:
+    """CityOS gateway mode must stream through LiteLLM, not direct providers."""
+    import os
+
+    llm_mode = os.environ.get("CITYOSJARVIS_LLM_MODE", "").strip().lower()
+    if llm_mode in {"gateway", "litellm"}:
+        return False
+    if os.environ.get("OPENAI_API_BASE") or os.environ.get("OPENAI_BASE_URL"):
+        return False
+    if _engine_chain_contains_id(engine, {"litellm"}):
+        return False
+    return True
+
+
 async def _handle_stream(
     engine,
     model: str,
@@ -432,7 +468,7 @@ async def _handle_stream(
 
     # Route directly to the right backend — bypasses engine routing entirely
     # so broken MultiEngine state can never misdirect requests.
-    use_cloud = is_cloud_model(model)
+    use_cloud = is_cloud_model(model) and _should_use_direct_cloud_router(engine)
 
     async def generate():
         # Send role chunk first
@@ -577,6 +613,10 @@ async def list_models(request: Request) -> ModelListResponse:
     model_ids = [m for m in all_ids if not is_cloud_model(m)]
     if not model_ids:
         model_ids = await list_local_models()
+    if not model_ids:
+        server_model = getattr(request.app.state, "model", "")
+        if server_model:
+            model_ids = [server_model]
 
     return ModelListResponse(
         data=[ModelObject(id=mid) for mid in model_ids],

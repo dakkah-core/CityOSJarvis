@@ -308,6 +308,47 @@ class TestChatCompletions:
                     content += delta_content
         assert content == "Hello world"
 
+    def test_streaming_gateway_cloud_model_uses_configured_engine(self, monkeypatch):
+        def fail_direct_cloud(*_args, **_kwargs):
+            raise AssertionError("direct cloud router should not be used")
+
+        async def gateway_stream(messages, *, model, **_kwargs):
+            assert model == "gpt-4o-mini"
+            yield "via"
+            yield " gateway"
+
+        monkeypatch.setenv("CITYOSJARVIS_LLM_MODE", "gateway")
+        monkeypatch.setattr(
+            "openjarvis.server.cloud_router.stream_cloud",
+            fail_direct_cloud,
+        )
+        engine = _make_engine()
+        engine.stream = gateway_stream
+        app = create_app(engine, "gpt-4o-mini")
+        client = TestClient(app)
+
+        resp = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": True,
+            },
+        )
+
+        content = ""
+        for line in resp.text.strip().split("\n"):
+            if line.startswith("data:") and "[DONE]" not in line:
+                data = json.loads(line[5:].strip())
+                delta_content = (
+                    data.get("choices", [{}])[0]
+                    .get("delta", {})
+                    .get("content")
+                )
+                if delta_content:
+                    content += delta_content
+        assert content == "via gateway"
+
     def test_streaming_with_tools_emits_tool_calls_and_bypasses_agent(self):
         """Regression for the streaming analog of #414.
 
@@ -446,6 +487,25 @@ class TestModelsEndpoint:
         resp = client.get("/v1/models")
         data = resp.json()
         assert len(data["data"]) == 3
+
+    def test_empty_discovery_falls_back_to_configured_server_model(self, monkeypatch):
+        async def no_local_models():
+            return []
+
+        monkeypatch.setattr(
+            "openjarvis.server.cloud_router.list_local_models",
+            no_local_models,
+        )
+        engine = _make_engine()
+        engine.list_models.return_value = []
+        app = create_app(engine, "gpt-4o-mini")
+        client = TestClient(app)
+
+        resp = client.get("/v1/models")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert [model["id"] for model in data["data"]] == ["gpt-4o-mini"]
 
 
 # ---------------------------------------------------------------------------

@@ -19,12 +19,16 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAppStore, type ThemeMode } from '../lib/store';
-import { checkHealth, fetchSpeechHealth, getMemoryStats, getInferenceSource, setInferenceSource, type InferenceSource } from '../lib/api';
+import { checkHealth, fetchSpeechHealth, getMemoryStats, getInferenceSource, isTauri, setInferenceSource, type InferenceSource } from '../lib/api';
 import { isAutoUpdateDisabled, setAutoUpdateDisabled } from '../components/Desktop/UpdateChecker';
 
 function OllamaModelList() {
   const [models, setModels] = useState<Array<{ name: string; size: number }>>([]);
   useEffect(() => {
+    if (!isTauri()) {
+      setModels([]);
+      return;
+    }
     fetch('http://localhost:11434/api/tags')
       .then(r => r.json())
       .then(data => setModels((data.models || []).map((m: any) => ({ name: m.name, size: m.size }))))

@@ -6,6 +6,15 @@ from typing import Any
 
 __all__ = ["SECURITY_HEADERS", "create_security_middleware"]
 
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "connect-src 'self' https://cdn.jsdelivr.net; "
+    "font-src 'self' https://cdn.jsdelivr.net data:"
+)
+
 
 def create_security_middleware() -> Any:
     """Create a FastAPI middleware that adds security headers.
@@ -48,9 +57,7 @@ def create_security_middleware() -> Any:
             response.headers["Permissions-Policy"] = (
                 "camera=(), microphone=(), geolocation=()"
             )
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self' 'unsafe-inline' 'unsafe-eval'"
-            )
+            response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
             return response
 
     return SecurityHeadersMiddleware
@@ -64,5 +71,5 @@ SECURITY_HEADERS = {
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "Content-Security-Policy": CONTENT_SECURITY_POLICY,
 }

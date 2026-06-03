@@ -7,7 +7,7 @@ import pathlib
 import time
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from openjarvis.server.analytics_routes import router as analytics_router
@@ -119,6 +119,19 @@ _NO_CACHE_HEADERS = {
     "Pragma": "no-cache",
     "Expires": "0",
 }
+
+
+def _find_favicon_file() -> pathlib.Path | None:
+    """Return the packaged favicon path when the frontend assets are available."""
+    server_dir = pathlib.Path(__file__).resolve().parent
+    candidates = [
+        server_dir / "static" / "favicon.ico",
+        server_dir.parents[2] / "frontend" / "public" / "favicon.ico",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 class _NoCacheStaticFiles(StaticFiles):
@@ -373,6 +386,17 @@ def create_app(
             return metrics_endpoint()
     except Exception as exc:
         logger.debug("Metrics endpoint init skipped: %s", exc)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _favicon():
+        favicon_path = _find_favicon_file()
+        if favicon_path is None:
+            return Response(status_code=204, headers=_NO_CACHE_HEADERS)
+        return FileResponse(
+            favicon_path,
+            media_type="image/x-icon",
+            headers=_NO_CACHE_HEADERS,
+        )
 
     # Serve static frontend assets if the static/ directory exists
     static_dir = pathlib.Path(__file__).parent / "static"

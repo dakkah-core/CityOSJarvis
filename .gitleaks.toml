@@ -1,0 +1,14 @@
+title = "CityOSJarvis Gitleaks configuration"
+
+[allowlist]
+description = "Allow documented fake credential fixtures used by security tests and docs."
+paths = [
+  '''docs/user-guide/security\.md''',
+  '''tests/analytics/test_redaction\.py''',
+  '''tests/security/test_boundary_guard\.py''',
+  '''tests/security/test_guardrails\.py''',
+  '''tests/security/test_log_sanitization\.py''',
+  '''tests/security/test_scanner\.py''',
+  '''tests/security/test_taint\.py''',
+  '''tests/server/test_webhook_routes\.py'''
+]

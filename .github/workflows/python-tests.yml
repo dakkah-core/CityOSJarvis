@@ -36,7 +36,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Sync dependencies
-        run: uv sync --extra server --extra scheduler --extra speech
+        run: uv sync --extra dev --extra server --extra scheduler --extra speech
 
       - name: Ruff check
         run: uv run ruff check src tests --output-format=github
@@ -67,7 +67,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Sync dependencies
-        run: uv sync --extra server --extra scheduler --extra speech
+        run: uv sync --extra dev --extra server --extra scheduler --extra speech
 
       - name: Run unit tests
         run: uv run pytest tests/cityos/test_auth.py tests/cityos/test_tenant.py tests/cityos/test_compliance.py tests/cityos/test_audit.py tests/cityos/test_tools.py -v --tb=short --junitxml=test-results/unit-results.xml
@@ -104,7 +104,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Sync dependencies
-        run: uv sync --extra server --extra scheduler --extra speech
+        run: uv sync --extra dev --extra server --extra scheduler --extra speech
 
       - name: Run integration tests
         run: uv run pytest tests/cityos/test_integration_chat.py -v --tb=short --junitxml=test-results/integration-results.xml
@@ -142,7 +142,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Sync dependencies
-        run: uv sync --extra server --extra scheduler --extra speech
+        run: uv sync --extra dev --extra server --extra scheduler --extra speech
 
       - name: Run security tests
         run: uv run pytest tests/cityos/test_security_phi_injection.py -v --tb=short --junitxml=test-results/security-results.xml

@@ -91,6 +91,17 @@ class TestPWAServing:
         assert resp.status_code == 200
         assert b"PNG" in resp.content
 
+    def test_favicon_returns_no_content_when_asset_missing(self, monkeypatch):
+        """Favicon requests should not produce noisy 404s on API-only builds."""
+        from openjarvis.server import app as app_module
+
+        monkeypatch.setattr(app_module, "_find_favicon_file", lambda: None)
+        client = TestClient(create_app(_make_engine(), "test-model"))
+
+        resp = client.get("/favicon.ico")
+
+        assert resp.status_code == 204
+
     def test_api_routes_bypass_spa(self, client_with_static):
         """API routes should still work regardless of SPA catch-all."""
         resp = client_with_static.get("/v1/models")

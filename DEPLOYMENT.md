@@ -108,8 +108,11 @@ docker compose -f docker-compose.yml \
   -f ../CityOSJarvis/deploy/docker/docker-compose.integrated.yml \
   up -d cityosjarvis
 
-# Or with the full VPS compose
-docker compose -f docker-compose.vps.yml --profile ai up -d cityosjarvis
+# Or with the full VPS compose plus AI gateway overlay
+docker compose -f docker-compose.vps.yml \
+  -f infra/compose/ai-stack.yml \
+  --profile core --profile auth --profile ai --profile ai-gateway \
+  up -d litellm cityosjarvis
 ```
 
 CityOSJarvis connects to:
@@ -117,7 +120,7 @@ CityOSJarvis connects to:
 - **Redis** — existing `cityos-redis` container
 - **Keycloak** — existing `cityos-keycloak` container
 - **Loki** — existing `cityos-infra_loki` container
-- **Traefik** — auto-registered route at `/jarvis`
+- **CMS BFF** - internal route target at `http://cityosjarvis:8000`
 
 ---
 
@@ -140,8 +143,8 @@ This builds and starts:
 
 ```bash
 # Health checks
-curl http://localhost:8000/health
-curl http://localhost:4000/health/liveliness
+curl http://localhost:${PORT_CITYOSJARVIS:-8010}/health
+curl http://localhost:${PORT_LITELLM:-4012}/health/liveliness
 curl http://localhost:11434/api/tags
 
 # E2E tests
@@ -227,20 +230,32 @@ The workflow triggers on:
 
 ### 3. VPS Compose Integration
 
-The monorepo's `docker-compose.vps.yml` already includes the `cityosjarvis` service. On the VPS:
+The CMS monorepo owns the VPS deployment surface and its ops-helper container manages Jarvis source, image build, deployment, migration/readiness, seed verification, and audit.
+
+Fixed VPS source directories:
+- CMS source: `/opt/dakkah-cityos-cms-src`
+- Jarvis source: `/opt/dakkah-cityosjarvis-src`
+
+Canonical Jarvis image: `ghcr.io/dakkah-core/cityosjarvis:latest`
+
+The Jarvis workflow calls the CMS ops-helper command:
 
 ```bash
 cd /opt/dakkah-cityos-cms-src
 
-# Pull latest image
-docker pull ghcr.io/dakkah/cityosjarvis:latest
-
-# Deploy with AI profile
-docker compose -f docker-compose.vps.yml --profile ai up -d cityosjarvis
+docker compose \
+  -p cityos-helpers \
+  -f deploy/docker-compose.helpers.yml \
+  --profile ops \
+  --env-file /opt/dakkah-cityos-platform/.env \
+  run --rm --no-deps cityos-ops-helper \
+  jarvis-deploy "${CITYOSJARVIS_REF:-cityos/main}"
 
 # Verify health
-curl -fs http://localhost:8000/health
+curl -fs http://localhost:${PORT_CITYOSJARVIS:-8010}/health
 ```
+
+The helper uses `CITYOSJARVIS_REPO_URL`, `CITYOSJARVIS_REF`, and `CITYOSJARVIS_HOST_SOURCE_DIR` to clone/fetch Jarvis, then builds `CITYOSJARVIS_IMAGE` from `/opt/dakkah-cityosjarvis-src/deploy/docker/Dockerfile.cityos`. Internal service routing remains `http://cityosjarvis:8000`; the host health port remains loopback `8010`.
 
 ---
 
@@ -345,7 +360,7 @@ npx playwright test --config=e2e/ai-stack/playwright.config.ts
 
 ```env
 E2E_JARVIS_URL=http://localhost:8000
-E2E_LITELLM_URL=http://localhost:4000
+E2E_LITELLM_URL=http://localhost:4012
 E2E_OLLAMA_URL=http://localhost:11434
 LITELLM_MASTER_KEY=sk-litellm-cityos-local
 OPENJARVIS_API_KEY=cityos-local-key

@@ -22,7 +22,7 @@ services:
     image: cityosjarvis:local
     container_name: cityosjarvis-local
     ports:
-      - "${PORT_CITYOSJARVIS:-8001}:8000"
+      - "${PORT_CITYOSJARVIS:-8010}:8000"
     environment:
       OPENJARVIS_API_KEY: ${OPENJARVIS_API_KEY:-cityos-local-key}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-}
@@ -67,9 +67,9 @@ services:
     image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-latest}
     container_name: litellm-local
     ports:
-      - "${PORT_LITELLM:-4000}:4000"
+      - "127.0.0.1:${PORT_LITELLM:-4012}:4000"
     volumes:
-      - ../../infra/litellm/config.yaml:/app/config.yaml:ro
+      - ../../litellm-config.local.yaml:/app/config.yaml:ro
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

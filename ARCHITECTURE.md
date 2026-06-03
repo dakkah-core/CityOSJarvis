@@ -280,9 +280,16 @@ docker compose -f deploy/docker/docker-compose.build.yml up -d cityosjarvis olla
 ### Pattern 3: VPS Production
 
 ```bash
-docker compose -f docker-compose.vps.yml --profile ai up -d cityosjarvis
+cd /opt/dakkah-cityos-cms-src
+docker compose -p cityos-helpers \
+  -f deploy/docker-compose.helpers.yml \
+  --profile ops \
+  --env-file /opt/dakkah-cityos-platform/.env \
+  run --rm --no-deps cityos-ops-helper jarvis-deploy "${CITYOSJARVIS_REF:-cityos/main}"
 # LiteLLM gateway with multi-provider fallback
 ```
+
+CMS source lives at `/opt/dakkah-cityos-cms-src`; Jarvis source lives at `/opt/dakkah-cityosjarvis-src` and is prepared by the CMS ops-helper before image build.
 
 ### Pattern 4: VPS + GPU Node
 

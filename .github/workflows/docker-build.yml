@@ -34,7 +34,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: dakkah-core/cityosjarvis
   DOCKERFILE: deploy/docker/Dockerfile.cityos
 
 jobs:
@@ -106,7 +106,7 @@ jobs:
           exit 1
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:ci-${{ github.sha }}
           format: 'sarif'

@@ -81,9 +81,9 @@ services:
     image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-latest}
     container_name: litellm-local
     ports:
-      - "4000:4000"
+      - "127.0.0.1:${PORT_LITELLM:-4012}:4000"
     volumes:
-      - ../../infra/litellm/config.yaml:/app/config.yaml:ro
+      - ../../litellm-config.local.yaml:/app/config.yaml:ro
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

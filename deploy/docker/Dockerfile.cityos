@@ -2,7 +2,7 @@
 # Based on OpenJarvis with CityOS-specific extras pre-installed
 #
 # Build:
-#   docker build -f deploy/docker/Dockerfile.cityos -t ghcr.io/dakkah/cityosjarvis:latest .
+#   docker build -f deploy/docker/Dockerfile.cityos -t ghcr.io/dakkah-core/cityosjarvis:latest .
 #
 # Run:
 #   docker run -p 8000:8000 \
@@ -10,7 +10,7 @@
 #     -e KEYCLOAK_REALM=cityos \
 #     -e OPENJARVIS_API_KEY=${OPENJARVIS_API_KEY} \
 #     -e CITYOS_AUDIT_DIR=/var/log/cityosjarvis \
-#     ghcr.io/dakkah/cityosjarvis:latest
+#     ghcr.io/dakkah-core/cityosjarvis:latest
 
 ARG BASE_IMAGE=python:3.13-slim
 ARG WHISPER_MODEL=base
@@ -54,7 +54,7 @@ COPY scripts/ ./scripts/
 #   server    — FastAPI + Uvicorn
 #   scheduler — Cron-like scheduled agents
 #   speech    — faster-whisper for STT/TTS
-RUN uv sync --extra server --extra scheduler --extra speech
+RUN uv sync --extra server --extra scheduler --extra speech --extra inference-litellm
 
 # Phase 2 — Optional integrations (best-effort; network hiccups tolerated)
 #   browser          — Playwright for web browsing
@@ -65,7 +65,7 @@ RUN uv sync --extra server --extra scheduler --extra speech
 #   channel-email    — Email channel
 #   pdf              — PDF parsing
 #   security-signing — Cryptography for signing
-RUN uv sync --extra server --extra scheduler --extra speech --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing || true
+RUN uv sync --extra server --extra scheduler --extra speech --extra inference-litellm --extra browser --extra tools-search --extra channel-telegram --extra channel-slack --extra channel-discord --extra channel-email --extra pdf --extra security-signing || true
 
 # --- Runtime stage ---
 FROM ${BASE_IMAGE} AS runtime

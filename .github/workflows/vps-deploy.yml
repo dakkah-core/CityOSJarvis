@@ -19,7 +19,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: dakkah/cityosjarvis
+  IMAGE_NAME: dakkah-core/cityosjarvis
 
 jobs:
   build-and-push:
@@ -55,6 +55,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
+            type=raw,value=latest
             type=sha,prefix=,suffix=,format=short
 
       - name: Build and push
@@ -81,35 +82,41 @@ jobs:
     environment:
       name: ${{ github.event.inputs.environment || 'staging' }}
     steps:
-      - name: Deploy via SSH
+      - name: Deploy via CMS ops-helper
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CITYOSJARVIS_REPO_URL: https://github.com/${{ github.repository }}.git
+          CITYOSJARVIS_REF: ${{ github.sha }}
+          CITYOSJARVIS_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          CITYOSJARVIS_DEPLOY_MODE: build
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || '22' }}
+          host: ${{ secrets.VPS_HOST || secrets.VPS_STAGING_HOST }}
+          username: ${{ secrets.VPS_USER || secrets.VPS_STAGING_USER }}
+          key: ${{ secrets.VPS_SSH_KEY || secrets.VPS_STAGING_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || secrets.VPS_STAGING_PORT || '22' }}
+          envs: GITHUB_TOKEN,CITYOSJARVIS_REPO_URL,CITYOSJARVIS_REF,CITYOSJARVIS_IMAGE,CITYOSJARVIS_DEPLOY_MODE
           script: |
             set -euo pipefail
-            echo "=== Deploying CityOSJarvis ==="
-            cd /opt/dakkah-cityos-cms-src
+            echo "=== Deploying CityOSJarvis through CMS ops-helper ==="
+            export VPS_APP_DIR="${VPS_APP_DIR:-/opt/dakkah-cityos-platform}"
+            export VPS_SOURCE_DIR="${VPS_SOURCE_DIR:-/opt/dakkah-cityos-cms-src}"
+            export CITYOS_COMPOSE_ENV_FILE="${CITYOS_COMPOSE_ENV_FILE:-${VPS_APP_DIR}/.env}"
+            export CITYOSJARVIS_HOST_SOURCE_DIR="${CITYOSJARVIS_HOST_SOURCE_DIR:-/opt/dakkah-cityosjarvis-src}"
 
-            # Pull latest image
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            mkdir -p "${CITYOSJARVIS_HOST_SOURCE_DIR}"
+            cd "${VPS_SOURCE_DIR}"
 
-            # Update compose with new image
-            export CITYOSJARVIS_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            docker compose -f docker-compose.vps.yml up -d cityosjarvis
-
-            # Wait for health
-            for i in {1..30}; do
-              if curl -fs http://localhost:8000/health > /dev/null 2>&1; then
-                echo "CityOSJarvis is healthy!"
-                exit 0
-              fi
-              echo "Waiting for health... ($i/30)"
-              sleep 2
-            done
-
-            echo "Health check failed!"
-            docker logs cityosjarvis --tail 50
-            exit 1
+            docker compose \
+              -p cityos-helpers \
+              -f deploy/docker-compose.helpers.yml \
+              --profile ops \
+              --env-file "${CITYOS_COMPOSE_ENV_FILE}" \
+              run --rm --no-deps \
+              -e GITHUB_TOKEN \
+              -e CITYOSJARVIS_REPO_URL \
+              -e CITYOSJARVIS_REF \
+              -e CITYOSJARVIS_IMAGE \
+              -e CITYOSJARVIS_DEPLOY_MODE \
+              -e CITYOSJARVIS_HOST_SOURCE_DIR \
+              cityos-ops-helper jarvis-deploy "${CITYOSJARVIS_REF}"

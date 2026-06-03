@@ -42,10 +42,10 @@ jobs:
         run: |
           if [ -n "${SCAN_RANGE}" ] && [ "${SCAN_RANGE}" != "0000000000000000000000000000000000000000..${GITHUB_SHA}" ]; then
             echo "Scanning commit range: ${SCAN_RANGE}"
-            gitleaks git --redact --verbose --log-opts="${SCAN_RANGE}" --report-format sarif --report-path gitleaks-results.sarif
+            gitleaks git --config=.gitleaks.toml --redact --verbose --log-opts="${SCAN_RANGE}" --report-format sarif --report-path gitleaks-results.sarif
           else
             echo "Scanning full history"
-            gitleaks git --redact --verbose --report-format sarif --report-path gitleaks-results.sarif
+            gitleaks git --config=.gitleaks.toml --redact --verbose --report-format sarif --report-path gitleaks-results.sarif
           fi
 
       - name: Run custom secret patterns
@@ -141,7 +141,7 @@ jobs:
           python-version: "3.13"
 
       - name: Sync dependencies
-        run: uv sync --extra server --extra scheduler --extra speech
+        run: uv sync --extra dev --extra server --extra scheduler --extra speech
 
       - name: Run Bandit
         run: uv run bandit -r src/openjarvis/cityos -f json -o bandit-results.json || true
@@ -184,7 +184,7 @@ jobs:
           tags: cityosjarvis:scan
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -193,7 +193,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: 'cityosjarvis:scan'
           format: 'sarif'

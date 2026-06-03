@@ -78,7 +78,7 @@ def test_get_digest_audio(store, tmp_path):
     assert resp.content == b"fake-mp3"
 
 
-def test_get_digest_404(tmp_path):
+def test_get_digest_empty_state(tmp_path):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -89,7 +89,8 @@ def test_get_digest_404(tmp_path):
 
     client = TestClient(app)
     resp = client.get("/api/digest")
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    assert resp.json()["audio_available"] is False
 
 
 def test_get_history(store, tmp_path):

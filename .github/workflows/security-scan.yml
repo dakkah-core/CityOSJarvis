@@ -2,9 +2,9 @@ name: Security Scan
 
 on:
   push:
-    branches: [cityos/main]
+    branches: [main]
   pull_request:
-    branches: [cityos/main]
+    branches: [main]
   schedule:
     - cron: "0 2 * * 1"
   workflow_dispatch:

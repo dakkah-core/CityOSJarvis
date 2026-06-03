@@ -2,10 +2,10 @@ name: Build Docker Image
 
 on:
   push:
-    branches: [cityos/main]
+    branches: [main]
     tags: ['v*']
   pull_request:
-    branches: [cityos/main]
+    branches: [main]
     paths:
       - 'deploy/docker/**'
       - 'src/**'

@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: cityos/main
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -38,7 +38,7 @@ jobs:
       - name: Check for changes
         id: check
         run: |
-          BEHIND=$(git rev-list --count cityos/main..upstream/main || echo 0)
+          BEHIND=$(git rev-list --count main..upstream/main || echo 0)
           echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
           echo "Upstream is $BEHIND commits ahead"
 
@@ -95,7 +95,7 @@ jobs:
             gh pr create \
               --title "chore: sync upstream $(date +%Y-%m-%d)" \
               --body "Automated upstream sync from open-jarvis/OpenJarvis.\n\n- Commits behind: ${{ steps.check.outputs.commits_behind }}\n- CityOS-specific files preserved (cityos/, Dockerfile.cityos)\n\nPlease review for breaking changes." \
-              --base cityos/main \
+              --base main \
               --head "$BRANCH" \
               --label "upstream-sync"
           fi

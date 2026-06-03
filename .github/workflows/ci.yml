@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [cityos/main]
+    branches: [main]
   pull_request:
-    branches: [cityos/main]
+    branches: [main]
 
 jobs:
   python-tests:

@@ -20,6 +20,10 @@ def _make_app(api_key: str) -> FastAPI:
     async def models():
         return {"models": []}
 
+    @app.get("/v1/savings")
+    async def savings():
+        return {"total_calls": 0}
+
     @app.get("/health")
     async def health():
         return {"status": "ok"}
@@ -59,6 +63,10 @@ class TestAuthMiddleware:
 
     def test_health_exempt(self, client):
         resp = client.get("/health")
+        assert resp.status_code == 200
+
+    def test_public_readonly_dashboard_data_exempt(self, client):
+        resp = client.get("/v1/savings")
         assert resp.status_code == 200
 
     def test_webhooks_exempt(self, client):

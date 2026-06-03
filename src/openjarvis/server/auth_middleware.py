@@ -12,6 +12,11 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
+PUBLIC_READONLY_API_PATHS = {
+    "/v1/analytics/identity",
+    "/v1/savings",
+}
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Validates ``Authorization: Bearer <key>`` on ``/v1/*`` and ``/api/*`` routes.
@@ -43,6 +48,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     @staticmethod
     def _requires_auth(path: str) -> bool:
         """Only protect API routes, not the frontend UI or static assets."""
+        if path.rstrip("/") in PUBLIC_READONLY_API_PATHS:
+            return False
         return path.startswith("/v1/") or path.startswith("/api/")
 
 

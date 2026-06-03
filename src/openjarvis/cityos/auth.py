@@ -19,6 +19,11 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
+PUBLIC_READONLY_API_PATHS = {
+    "/v1/analytics/identity",
+    "/v1/savings",
+}
+
 
 class CityOSAuthMiddleware(BaseHTTPMiddleware):
     """Validates Keycloak JWT tokens on all /v1/* and /api/* routes.
@@ -62,7 +67,8 @@ class CityOSAuthMiddleware(BaseHTTPMiddleware):
 
     def _requires_auth(self, path: str) -> bool:
         exempt = {"/health", "/v1/health", "/api/health"}
-        if path in exempt:
+        normalized_path = path.rstrip("/")
+        if path in exempt or normalized_path in PUBLIC_READONLY_API_PATHS:
             return False
         if path.startswith("/v1/") or path.startswith("/api/"):
             return True

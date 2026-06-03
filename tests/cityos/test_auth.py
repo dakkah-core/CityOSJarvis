@@ -27,6 +27,11 @@ class TestRequiresAuth:
         assert middleware._requires_auth("/v1/agents") is True
         assert middleware._requires_auth("/v1/voice/process-intent") is True
 
+    def test_public_readonly_api_routes_optional(self, middleware):
+        assert middleware._requires_auth("/v1/savings") is False
+        assert middleware._requires_auth("/v1/savings/") is False
+        assert middleware._requires_auth("/v1/analytics/identity") is False
+
     def test_api_routes_require_auth(self, middleware):
         assert middleware._requires_auth("/api/voice/webhook") is True
         assert middleware._requires_auth("/api/status") is True

@@ -345,6 +345,23 @@ export function SettingsPage() {
                 }}
               />
             </SettingRow>
+            <SettingRow label="Jarvis API key" description="Used for protected Jarvis API and chat requests">
+              <div className="flex items-center gap-2">
+                <Key size={14} style={{ color: settings.apiKey ? 'var(--color-success)' : 'var(--color-text-tertiary)' }} />
+                <input
+                  type="password"
+                  value={settings.apiKey}
+                  onChange={(e) => { updateSettings({ apiKey: e.target.value }); showSaved(); }}
+                  placeholder="Jarvis API key"
+                  className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
+                  style={{
+                    background: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                />
+              </div>
+            </SettingRow>
           </Section>
 
           {/* Inference source */}

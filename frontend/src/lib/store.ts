@@ -70,6 +70,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 interface Settings {
   theme: ThemeMode;
   apiUrl: string;
+  apiKey: string;
   fontSize: 'small' | 'default' | 'large';
   defaultModel: string;
   defaultAgent: string;
@@ -82,6 +83,7 @@ function loadSettings(): Settings {
   const defaults: Settings = {
     theme: 'system',
     apiUrl: '',
+    apiKey: '',
     fontSize: 'default',
     defaultModel: '',
     defaultAgent: '',

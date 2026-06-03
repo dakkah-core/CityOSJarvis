@@ -23,6 +23,16 @@ class TestSecurityHeaders:
         }
         assert set(SECURITY_HEADERS.keys()) == expected_keys
 
+    def test_csp_allows_hosted_api_docs_assets(self) -> None:
+        """Swagger and ReDoc assets are allowed without opening all origins."""
+        csp = SECURITY_HEADERS["Content-Security-Policy"]
+        assert "https://cdn.jsdelivr.net" in csp
+        assert "https://fastapi.tiangolo.com" in csp
+        assert "https://fonts.googleapis.com" in csp
+        assert "https://fonts.gstatic.com" in csp
+        assert "https://cdn.redoc.ly" in csp
+        assert "worker-src 'self' blob:" in csp
+
     def test_create_middleware_without_starlette(self) -> None:
         """When starlette is not available, returns None."""
         import importlib

@@ -17,9 +17,17 @@ function buildWsUrl(agentId?: string): string {
     origin = `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}`;
   }
   const path = '/v1/agents/events';
-  return agentId
-    ? `${origin}${path}?agent_id=${encodeURIComponent(agentId)}`
-    : `${origin}${path}`;
+  const params = new URLSearchParams();
+  if (agentId) params.set('agent_id', agentId);
+  try {
+    const rawSettings = localStorage.getItem('openjarvis-settings');
+    const settings = rawSettings ? JSON.parse(rawSettings) : {};
+    if (settings.apiKey) params.set('token', settings.apiKey);
+  } catch {
+    /* no stored token */
+  }
+  const query = params.toString();
+  return query ? `${origin}${path}?${query}` : `${origin}${path}`;
 }
 
 /**

@@ -43,6 +43,23 @@ function isJarvisApiUrl(target: URL, apiUrl?: string): boolean {
   }
 }
 
+function isPublicJarvisApiPath(pathname: string): boolean {
+  return pathname === '/v1/savings' || pathname === '/v1/analytics/identity';
+}
+
+function missingApiKeyResponse(): Promise<Response> {
+  return Promise.resolve(new Response(JSON.stringify({
+    detail: 'Jarvis API key required. Add it in Settings.',
+  }), {
+    status: 401,
+    statusText: 'Unauthorized',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-OpenJarvis-Auth': 'missing-api-key',
+    },
+  }));
+}
+
 function installJarvisApiAuth(): void {
   if (window.__openJarvisAuthFetchInstalled) return;
   const nativeFetch = window.fetch.bind(window);
@@ -52,8 +69,14 @@ function installJarvisApiAuth(): void {
     const apiKey = settings.apiKey?.trim();
     const target = parseRequestUrl(input);
 
-    if (!apiKey || !target || !isJarvisApiUrl(target, settings.apiUrl)) {
+    if (!target || !isJarvisApiUrl(target, settings.apiUrl)) {
       return nativeFetch(input, init);
+    }
+
+    if (!apiKey) {
+      return isPublicJarvisApiPath(target.pathname)
+        ? nativeFetch(input, init)
+        : missingApiKeyResponse();
     }
 
     const headers = new Headers(

@@ -19,11 +19,13 @@ from openjarvis.core.types import (
     ToolCall,
     ToolResult,
 )
+from openjarvis.core.utils import get_python_executable
 
 __all__ = [
     "AgentRegistry",
     "Conversation",
     "EngineRegistry",
+    "get_python_executable",
     "MemoryRegistry",
     "Message",
     "ModelRegistry",

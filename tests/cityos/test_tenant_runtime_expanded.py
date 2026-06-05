@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openjarvis.cityos.tenant_runtime import TenantAwareAgentRunner
 from openjarvis.cityos.tenant import TenantContext
+from openjarvis.cityos.tenant_runtime import TenantAwareAgentRunner
 
 
 class TestTenantAwareAgentRunner:

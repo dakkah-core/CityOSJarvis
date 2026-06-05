@@ -102,7 +102,9 @@ def serve(
 
     if cityos_resolved is not None:
         engine_name, engine, model_name = cityos_resolved
-        console.print(f"  CityOS: [cyan]{engine_name}[/cyan] mode (model: {model_name})")
+        console.print(
+            f"  CityOS: [cyan]{engine_name}[/cyan] mode (model: {model_name})"
+        )
     else:
         resolved = get_engine(config, engine_key)
         if resolved is None:

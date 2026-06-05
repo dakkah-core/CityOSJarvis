@@ -17,8 +17,14 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from fastapi import Request, Response
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 # ── HTTP Request metrics ──────────────────────────────────────────────────────
 
@@ -229,7 +235,9 @@ class MetricsMiddleware:
             await self.app(scope, receive, wrapped_send)
         finally:
             latency = time.perf_counter() - start
-            REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status_code).inc()
+            REQUEST_COUNT.labels(
+                method=method, endpoint=endpoint, status_code=status_code
+            ).inc()
             REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(latency)
             ACTIVE_CONNECTIONS.dec()
 
@@ -250,6 +258,7 @@ def _simplify_path(path: str) -> str:
 def metrics_endpoint() -> Response:
     """Return Prometheus metrics."""
     from fastapi.responses import Response as FastAPIResponse
+
     return FastAPIResponse(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,

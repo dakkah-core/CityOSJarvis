@@ -9,8 +9,10 @@ __all__ = ["SECURITY_HEADERS", "create_security_middleware"]
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
-    "style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+    "https://fonts.googleapis.com; "
+    "style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+    "https://fonts.googleapis.com; "
     "img-src 'self' data: https://fastapi.tiangolo.com https://cdn.redoc.ly; "
     "connect-src 'self' https://cdn.jsdelivr.net; "
     "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com data:; "

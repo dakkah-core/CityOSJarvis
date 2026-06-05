@@ -6,12 +6,12 @@ import pytest
 
 from openjarvis.cityos.tenant import TenantContext
 from openjarvis.cityos.tools import (
-    GovernanceTools,
     CommerceTools,
-    HealthcareTool,
-    TransportationTool,
     FleetTools,
+    GovernanceTools,
+    HealthcareTool,
     PublicSafetyTool,
+    TransportationTool,
 )
 
 
@@ -114,7 +114,13 @@ class TestHealthcareTool:
 
         assert result["success"] is True
         for facility in result["facilities"]:
-            phi_fields = ["patient_id", "diagnosis", "prescription", "medical_record", "national_id"]
+            phi_fields = [
+                "patient_id",
+                "diagnosis",
+                "prescription",
+                "medical_record",
+                "national_id",
+            ]
             for field in phi_fields:
                 assert field not in facility, f"PHI field '{field}' leaked in response"
 
@@ -127,7 +133,9 @@ class TestHealthcareTool:
 
         assert result["success"] is True
         assert "disclaimer" in result
-        assert "997" in result["disclaimer"] or "emergency" in result["disclaimer"].lower()
+        assert (
+            "997" in result["disclaimer"] or "emergency" in result["disclaimer"].lower()
+        )
 
 
 class TestTransportationTool:

@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from openjarvis.cityos.tenant import TenantContext
+
 from .base import CityOSTool
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,9 @@ class GovernanceTools(CityOSTool):
         self._bff_url = os.environ.get("CITYOS_BFF_URL", "http://localhost:4001")
         self._client: httpx.AsyncClient | None = None
 
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         permit_id = params.get("permit_id", "")
         return {
             "success": True,
@@ -219,7 +222,9 @@ class GovernanceTools(CityOSTool):
         return [
             {
                 "name": "governance_search_services",
-                "description": "Search government services by query and optional category",
+                "description": (
+                    "Search government services by query and optional category"
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -248,7 +253,10 @@ class GovernanceTools(CityOSTool):
                     "type": "object",
                     "properties": {
                         "service_id": {"type": "string"},
-                        "datetime": {"type": "string", "description": "ISO 8601 datetime"},
+                        "datetime": {
+                            "type": "string",
+                            "description": "ISO 8601 datetime",
+                        },
                         "user_id": {"type": "string"},
                     },
                     "required": ["service_id", "datetime", "user_id"],
@@ -273,7 +281,10 @@ class GovernanceTools(CityOSTool):
                     "properties": {
                         "fee_id": {"type": "string"},
                         "amount": {"type": "number"},
-                        "payment_method": {"type": "string", "enum": ["card", "wallet", "bank_transfer"]},
+                        "payment_method": {
+                            "type": "string",
+                            "enum": ["card", "wallet", "bank_transfer"],
+                        },
                     },
                     "required": ["fee_id", "amount", "payment_method"],
                 },

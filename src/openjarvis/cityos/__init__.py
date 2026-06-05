@@ -11,10 +11,10 @@ the Dakkah CityOS smart city platform, including:
 - Domain-specific MCP tool configurations
 """
 
-from .auth import CityOSAuthMiddleware
-from .tenant import TenantContext, get_tenant_context
-from .compliance import ComplianceGate
 from .audit import CityOSAuditLogger
+from .auth import CityOSAuthMiddleware
+from .compliance import ComplianceGate
+from .tenant import TenantContext, get_tenant_context
 
 # Voice service router (registered in app.py)
 from .voice_service import router as voice_router  # noqa: F401

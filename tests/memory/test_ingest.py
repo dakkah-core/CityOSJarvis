@@ -151,6 +151,13 @@ def test_ingest_skips_env_files(tmp_path: Path):
     assert any("readme.txt" in s for s in sources)
 
 
+def test_ingest_direct_file_skips_sensitive_policy(tmp_path: Path):
+    secret = tmp_path / ".env"
+    secret.write_text("OPENAI_API_KEY=sk-test", encoding="utf-8")
+
+    assert ingest_path(secret) == []
+
+
 def test_ingest_skips_key_files(tmp_path: Path):
     (tmp_path / "server.key").write_text(
         " ".join(f"x{i}" for i in range(100)), encoding="utf-8"

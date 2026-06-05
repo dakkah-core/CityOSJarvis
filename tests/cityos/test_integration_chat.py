@@ -17,16 +17,14 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 # Set audit dir before importing routes (module-level logger instantiation)
 os.environ["CITYOS_AUDIT_DIR"] = tempfile.mkdtemp()
 
-from openjarvis.cityos.compliance import ComplianceGate
 from openjarvis.cityos.audit import CityOSAuditLogger
-from openjarvis.cityos.tenant import TenantContext
+from openjarvis.cityos.compliance import ComplianceGate
 from openjarvis.server.routes import router as api_router
-from openjarvis.server.models import ChatCompletionRequest, ChatMessage
 
 
 @pytest.fixture
@@ -66,6 +64,7 @@ def audit_file():
 def patch_audit_logger(monkeypatch, audit_file):
     """Replace module-level audit logger with one writing to temp file."""
     import openjarvis.server.routes as routes_mod
+
     log_dir = Path(os.path.dirname(audit_file))
     logger = CityOSAuditLogger(log_dir=str(log_dir))
     monkeypatch.setattr(routes_mod, "_audit_logger", logger)
@@ -85,12 +84,16 @@ class TestChatCompletionsCompliance:
     @pytest.mark.asyncio
     async def test_blocks_saudi_id(self, app, auth_headers):
         """Saudi national ID in user message should return 403."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "My ID is 1234567890"}],
             }
-            response = await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            response = await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         assert response.status_code == 403
         data = response.json()
@@ -99,36 +102,50 @@ class TestChatCompletionsCompliance:
     @pytest.mark.asyncio
     async def test_blocks_credit_card(self, app, auth_headers):
         """Credit card number should return 403."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Card: 4532-1234-5678-9012"}],
             }
-            response = await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            response = await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_blocks_email(self, app, auth_headers):
         """Email address should return 403."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
-                "messages": [{"role": "user", "content": "Contact me at test@example.com"}],
+                "messages": [
+                    {"role": "user", "content": "Contact me at test@example.com"}
+                ],
             }
-            response = await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            response = await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_allows_safe_query(self, app, auth_headers, mock_engine):
         """Non-PHI query should succeed and call engine."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "What is the weather today?"}],
             }
-            response = await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            response = await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -142,12 +159,18 @@ class TestChatCompletionsAudit:
     @pytest.mark.asyncio
     async def test_logs_blocked_request(self, app, auth_headers, audit_file):
         """Blocked request should produce an audit log entry."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
-                "messages": [{"role": "user", "content": "My email is leak@example.com"}],
+                "messages": [
+                    {"role": "user", "content": "My email is leak@example.com"}
+                ],
             }
-            await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         with open(audit_file, "r", encoding="utf-8") as f:
             lines = [json.loads(line) for line in f if line.strip()]
@@ -159,12 +182,16 @@ class TestChatCompletionsAudit:
     @pytest.mark.asyncio
     async def test_logs_successful_request(self, app, auth_headers, audit_file):
         """Successful request should produce a chat.completion audit entry."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Hello, assistant!"}],
             }
-            await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+            await client.post(
+                "/v1/chat/completions", json=payload, headers=auth_headers
+            )
 
         with open(audit_file, "r", encoding="utf-8") as f:
             lines = [json.loads(line) for line in f if line.strip()]
@@ -181,14 +208,17 @@ class TestChatCompletionsAuth:
     @pytest.mark.asyncio
     async def test_allows_request_with_tenant_header(self, app):
         """Request with tenant header should proceed."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Hello"}],
             }
             response = await client.post(
-                "/v1/chat/completions", json=payload,
-                headers={"X-CityOS-Tenant-Id": "tenant-42"}
+                "/v1/chat/completions",
+                json=payload,
+                headers={"X-CityOS-Tenant-Id": "tenant-42"},
             )
 
         assert response.status_code == 200
@@ -196,7 +226,9 @@ class TestChatCompletionsAuth:
     @pytest.mark.asyncio
     async def test_allows_request_without_tenant_header(self, app):
         """Request without tenant header should still proceed (public access)."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -214,7 +246,9 @@ class TestChatCompletionsError:
         """Engine failure should be caught, audited, and re-raised."""
         app.state.engine.generate.side_effect = RuntimeError("model offline")
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -222,7 +256,9 @@ class TestChatCompletionsError:
             # Starlette error middleware may raise in test context;
             # the important part is that an error audit entry is written
             try:
-                await client.post("/v1/chat/completions", json=payload, headers=auth_headers)
+                await client.post(
+                    "/v1/chat/completions", json=payload, headers=auth_headers
+                )
             except RuntimeError:
                 pass  # Expected; error middleware re-raises in ASGI test context
 

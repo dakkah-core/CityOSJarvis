@@ -39,9 +39,20 @@ class TestWebSearchTool:
     def test_execute_no_api_key(self, monkeypatch):
         """When no API key, falls back to DuckDuckGo."""
         tool = WebSearchTool(api_key=None)
+        mock_ddgs = MagicMock()
+        mock_ddgs.text.return_value = [
+            {
+                "title": "DDG Result",
+                "href": "https://example.com",
+                "body": "Fallback result",
+            }
+        ]
+        mock_ddgs_module = MagicMock()
+        mock_ddgs_module.DDGS.return_value = mock_ddgs
         with patch.dict("os.environ", {}, clear=True):
             tool._api_key = None
-            monkeypatch.delitem(sys.modules, "tavily", raising=False)
+            monkeypatch.setitem(sys.modules, "tavily", None)
+            monkeypatch.setitem(sys.modules, "ddgs", mock_ddgs_module)
             result = tool.execute(query="test query")
         assert result.success is True
         assert result.metadata["engine"] == "duckduckgo"

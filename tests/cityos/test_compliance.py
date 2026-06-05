@@ -93,8 +93,7 @@ class TestBlockedPatterns:
         # The encoded secret pattern expects a long key name (20+ chars) before =
         # followed by a long base64-like value (20+ chars)
         result = gate.classify(
-            "my_very_long_configuration_secret_key="
-            "AbCdEfGhIjKlMnOpQrStUvWxYz1234567890"
+            "my_very_long_configuration_secret_key=AbCdEfGhIjKlMnOpQrStUvWxYz1234567890"
         )
         assert result.allowed is False
         assert "secret" in result.reason.lower() or "Encoded secret" in result.reason
@@ -157,16 +156,22 @@ class TestSecretHeuristic:
     def test_long_base64_blocked(self, gate):
         """Very long payload with high-entropy words should be blocked."""
         import secrets
+
         # Generate enough content to exceed 5000 chars and trigger secret heuristic
         secret_words = [secrets.token_hex(50) for _ in range(60)]
         payload = " ".join(secret_words)
-        assert len(payload) > 5000, "Payload must exceed 5000 chars to trigger heuristic"
+        assert len(payload) > 5000, (
+            "Payload must exceed 5000 chars to trigger heuristic"
+        )
         result = gate.classify(payload)
         assert result.allowed is False
 
     def test_normal_text_allowed(self, gate):
         """Normal text should not trigger secret heuristic."""
-        payload = "Hello, this is a normal message about the weather and traffic conditions. " * 10
+        payload = (
+            "Hello, this is a normal message about the weather and traffic conditions. "
+            * 10
+        )
         result = gate.classify(payload)
         assert result.allowed is True
 
@@ -220,7 +225,11 @@ class TestArabicSpecific:
         result = gate.classify_arabic("رقم الجواز 9876543210")
         assert result.allowed is False
         # Reason may be from base classify() or Arabic-specific path
-        assert "ID" in result.reason or "Saudi" in result.reason or "10-digit" in result.reason
+        assert (
+            "ID" in result.reason
+            or "Saudi" in result.reason
+            or "10-digit" in result.reason
+        )
 
     def test_arabic_error_message(self, gate):
         """Arabic-specific blocks should return Arabic error messages."""

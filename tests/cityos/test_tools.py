@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from openjarvis.cityos.tools import (
-    GovernanceTools,
     CommerceTools,
-    HealthcareTool,
-    TransportationTool,
     FleetTools,
+    GovernanceTools,
+    HealthcareTool,
     PublicSafetyTool,
+    TransportationTool,
 )
 
 
@@ -75,11 +73,13 @@ class TestFleetTools:
 class TestPublicSafetyTool:
     def test_incident_report_returns_ticket(self):
         tool = PublicSafetyTool()
-        result = tool.run({
-            "incident_type": "traffic",
-            "location": "Main St & 5th Ave",
-            "description": "Broken traffic light",
-        })
+        result = tool.run(
+            {
+                "incident_type": "traffic",
+                "location": "Main St & 5th Ave",
+                "description": "Broken traffic light",
+            }
+        )
         assert result["success"] is True
         assert "ticket_id" in result
         assert result["status"] == "received"

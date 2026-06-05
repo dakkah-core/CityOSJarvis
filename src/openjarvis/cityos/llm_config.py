@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Tuple
+from typing import Any, Tuple
 
 from openjarvis.core.registry import EngineRegistry
 from openjarvis.engine._base import InferenceEngine
@@ -45,7 +45,9 @@ def get_cityos_llm_config() -> Tuple[str, InferenceEngine, str] | None:
     if mode == "direct":
         return _setup_direct(model)
 
-    logger.warning("Unknown CITYOSJARVIS_LLM_MODE=%r, falling back to default discovery", mode)
+    logger.warning(
+        "Unknown CITYOSJARVIS_LLM_MODE=%r, falling back to default discovery", mode
+    )
     return None
 
 
@@ -61,10 +63,15 @@ def _setup_gateway(model: str) -> Tuple[str, InferenceEngine, str]:
         try:
             import openjarvis.engine.litellm  # noqa: F401
         except ImportError:
-            logger.error("LiteLLM engine not available. Install with: uv sync --extra inference-cloud")
-            raise RuntimeError("LiteLLM engine required for gateway mode but not installed")
+            logger.error(
+                "LiteLLM engine not available. Install with: uv sync "
+                "--extra inference-cloud"
+            )
+            raise RuntimeError(
+                "LiteLLM engine required for gateway mode but not installed"
+            )
 
-    cls = EngineRegistry.get("litellm")
+    cls: Any = EngineRegistry.get("litellm")
     engine = cls(api_base=api_base, default_model=model)
 
     # When a master key is set, inject it into the LiteLLM call kwargs
@@ -87,7 +94,7 @@ def _setup_ollama(model: str) -> Tuple[str, InferenceEngine, str]:
             logger.error("Ollama engine not available.")
             raise RuntimeError("Ollama engine required but not installed")
 
-    cls = EngineRegistry.get("ollama")
+    cls: Any = EngineRegistry.get("ollama")
     engine = cls(host=host)
     return ("ollama", engine, model)
 
@@ -100,9 +107,14 @@ def _setup_direct(model: str) -> Tuple[str, InferenceEngine, str]:
         try:
             import openjarvis.engine.cloud  # noqa: F401
         except ImportError:
-            logger.error("Cloud engine not available. Install with: uv sync --extra inference-cloud")
-            raise RuntimeError("Cloud engine required for direct mode but not installed")
+            logger.error(
+                "Cloud engine not available. Install with: uv sync "
+                "--extra inference-cloud"
+            )
+            raise RuntimeError(
+                "Cloud engine required for direct mode but not installed"
+            )
 
-    cls = EngineRegistry.get("cloud")
+    cls: Any = EngineRegistry.get("cloud")
     engine = cls()
     return ("cloud", engine, model)

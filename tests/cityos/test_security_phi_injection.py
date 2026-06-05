@@ -12,12 +12,12 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 os.environ["CITYOS_AUDIT_DIR"] = tempfile.mkdtemp()
 
-from openjarvis.cityos.compliance import ComplianceGate
 from openjarvis.cityos.audit import CityOSAuditLogger
+from openjarvis.cityos.compliance import ComplianceGate
 from openjarvis.server.routes import router as api_router
 
 
@@ -44,6 +44,7 @@ def app():
 def patch_gate_and_logger(monkeypatch):
     """Ensure fresh compliance gate and temp audit logger."""
     import openjarvis.server.routes as routes_mod
+
     with tempfile.TemporaryDirectory() as tmp:
         logger = CityOSAuditLogger(log_dir=tmp)
         monkeypatch.setattr(routes_mod, "_audit_logger", logger)
@@ -87,10 +88,14 @@ class TestPHIBlocking:
     """Each sensitive payload should return 403 and NOT call engine."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("test_id,payload", PHI_TEST_CASES, ids=[t[0] for t in PHI_TEST_CASES])
+    @pytest.mark.parametrize(
+        "test_id,payload", PHI_TEST_CASES, ids=[t[0] for t in PHI_TEST_CASES]
+    )
     async def test_phi_blocked(self, app, test_id: str, payload: str):
         """Sensitive data must be blocked before reaching engine."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.post(
                 "/v1/chat/completions",
                 json={
@@ -99,15 +104,21 @@ class TestPHIBlocking:
                 },
             )
 
-        assert response.status_code == 403, f"{test_id}: Expected 403, got {response.status_code}"
+        assert response.status_code == 403, (
+            f"{test_id}: Expected 403, got {response.status_code}"
+        )
         # Engine must NOT be called for blocked requests
         app.state.engine.generate.assert_not_called()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("test_id,payload", PHI_TEST_CASES, ids=[t[0] for t in PHI_TEST_CASES])
+    @pytest.mark.parametrize(
+        "test_id,payload", PHI_TEST_CASES, ids=[t[0] for t in PHI_TEST_CASES]
+    )
     async def test_phi_audit_trail(self, app, test_id: str, payload: str):
         """Blocked PHI requests must leave an audit trail."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             await client.post(
                 "/v1/chat/completions",
                 json={
@@ -136,7 +147,9 @@ class TestSafeQueriesAllowed:
     @pytest.mark.parametrize("payload", SAFE_CASES)
     async def test_safe_allowed(self, app, payload: str):
         """Non-sensitive queries should return 200."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.post(
                 "/v1/chat/completions",
                 json={
@@ -160,10 +173,14 @@ class TestPHIEvasion:
     ]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("test_id,payload", EVASION_CASES, ids=[t[0] for t in EVASION_CASES])
+    @pytest.mark.parametrize(
+        "test_id,payload", EVASION_CASES, ids=[t[0] for t in EVASION_CASES]
+    )
     async def test_evasion_blocked(self, app, test_id: str, payload: str):
         """Evasion attempts should still trigger blocking."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.post(
                 "/v1/chat/completions",
                 json={

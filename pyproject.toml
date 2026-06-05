@@ -162,22 +162,6 @@ packages = ["src/openjarvis"]
 "src/openjarvis/channels/whatsapp_baileys_bridge" = "_node_modules/whatsapp_baileys_bridge"
 "scripts/install" = "_install_scripts"
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "amd: requires AMD GPU",
-    "apple: requires Apple Silicon",
-    "cloud: requires cloud API keys",
-    "docker: requires a working Docker daemon (no GPU required)",
-    "live: requires running inference engine",
-    "macos15: requires macOS 15+ (Sequoia) for Apple FM",
-    "live_channel: requires real channel credentials (env vars)",
-    "nvidia: requires NVIDIA GPU",
-    "slow: long-running test",
-    "live_external: requires HERMES_AGENT_PATH and OPENCLAW_PATH; spawns real foreign-framework subprocesses",
-    "modal: requires Modal token + network; runs real swebench harness on Modal",
-]
-
 [tool.ruff]
 target-version = "py310"
 src = ["src", "tests"]
@@ -191,6 +175,10 @@ select = ["E", "F", "I", "W"]
 # hybrid/ is research code with long prompt strings and paradigm-specific
 # config dicts — same relaxation as evals research code above.
 "src/openjarvis/agents/hybrid/*.py" = ["E501"]
+"src/openjarvis/agents/hybrid/skillorchestra/prompts/*.py" = ["W291"]
+"src/openjarvis/agents/research_loop.py" = ["E501"]
+"src/openjarvis/cityos/compliance.py" = ["E501"]
+"tests/cityos/test_security_phi_injection.py" = ["E501"]
 
 [dependency-groups]
 dev = [

@@ -1,0 +1,1 @@
+{"agents":{"defaults":{"model":{"primary":"ollama/qwen3:0.6b"},"models":{"ollama/qwen3:0.6b":{}}}}}

@@ -542,6 +542,7 @@ class TestWhatsAppBaileysChannelConfig:
 
 def test_mining_config_absent_means_none(tmp_path):
     from openjarvis.core.config import load_config
+
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text("")  # empty config
     cfg = load_config(cfg_path)

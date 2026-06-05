@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
@@ -76,7 +74,9 @@ class TestCityOSAuditLogger:
             user_sub="user-123",
         )
 
-    def test_log_creates_file(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_log_creates_file(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat.completed",
             tenant=tenant,
@@ -86,7 +86,9 @@ class TestCityOSAuditLogger:
 
         assert logger._file.exists()
 
-    def test_log_contains_event_data(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_log_contains_event_data(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat.completed",
             tenant=tenant,
@@ -101,7 +103,9 @@ class TestCityOSAuditLogger:
         assert data["event"] == "chat.completed"
         assert data["actor"]["tenant_id"] == "test-tenant"
 
-    def test_log_sanitizes_content(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_log_sanitizes_content(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat.completed",
             tenant=tenant,
@@ -131,7 +135,9 @@ class TestCityOSAuditLogger:
 
         assert data["event"] == "system.startup"
 
-    def test_multiple_logs_append(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_multiple_logs_append(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         for i in range(3):
             logger.log(
                 event="chat.completed",
@@ -145,7 +151,9 @@ class TestCityOSAuditLogger:
 
         assert len(lines) == 3
 
-    def test_correlation_id_propagation(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_correlation_id_propagation(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat",
             tenant=tenant,
@@ -159,7 +167,9 @@ class TestCityOSAuditLogger:
 
         assert data["correlation_id"] == "corr-abc-123"
 
-    def test_latency_tracking(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_latency_tracking(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat",
             tenant=tenant,
@@ -173,7 +183,9 @@ class TestCityOSAuditLogger:
 
         assert data["latency_ms"] == 250.5
 
-    def test_tools_called_tracking(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_tools_called_tracking(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat",
             tenant=tenant,
@@ -187,7 +199,9 @@ class TestCityOSAuditLogger:
 
         assert data["tools_called"] == ["governance.lookup_permit", "commerce.search"]
 
-    def test_compliance_data(self, logger: CityOSAuditLogger, tenant: TenantContext) -> None:
+    def test_compliance_data(
+        self, logger: CityOSAuditLogger, tenant: TenantContext
+    ) -> None:
         logger.log(
             event="chat",
             tenant=tenant,

@@ -59,13 +59,27 @@ def detect_install() -> InstallInfo:
             upgrade_command="uv tool upgrade openjarvis",
         )
 
+    def is_repo_package_path(repo_root: Path) -> bool:
+        try:
+            relative_parts = pkg_file.relative_to(repo_root).parts
+        except ValueError:
+            return False
+        return relative_parts[:2] in {
+            ("src", "openjarvis"),
+            ("openjarvis", "__init__.py"),
+        }
+
     # Editable install: a ``.git`` dir within a few parents of the
     # package source. Walk up at most ~8 levels — enough for typical
     # ``<repo>/src/openjarvis/__init__.py`` layouts plus headroom, but
     # not so deep we wander into home or root.
     candidate = pkg_file.parent
     for _ in range(8):
-        if (candidate / ".git").exists() and (candidate / "pyproject.toml").exists():
+        if (
+            (candidate / ".git").exists()
+            and (candidate / "pyproject.toml").exists()
+            and is_repo_package_path(candidate)
+        ):
             return InstallInfo(
                 kind="editable-git",
                 upgrade_command=f"cd {candidate} && git pull && uv sync",

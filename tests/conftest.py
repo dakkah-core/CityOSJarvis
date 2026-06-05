@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import shutil
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,6 +29,110 @@ from openjarvis.core.registry import (
     ToolRegistry,
     TTSRegistry,
 )
+
+_OPT_IN_MARKERS = {
+    "live": (
+        "OPENJARVIS_RUN_LIVE_TESTS",
+        "set OPENJARVIS_RUN_LIVE_TESTS=1 or pass --run-live",
+    ),
+    "cloud": (
+        "OPENJARVIS_RUN_CLOUD_TESTS",
+        "set OPENJARVIS_RUN_CLOUD_TESTS=1 or pass --run-cloud",
+    ),
+    "live_channel": (
+        "OPENJARVIS_RUN_LIVE_CHANNEL_TESTS",
+        "set OPENJARVIS_RUN_LIVE_CHANNEL_TESTS=1 or pass --run-live-channel",
+    ),
+    "live_external": (
+        "OPENJARVIS_RUN_LIVE_EXTERNAL_TESTS",
+        "set OPENJARVIS_RUN_LIVE_EXTERNAL_TESTS=1 or pass --run-live-external",
+    ),
+    "slow": (
+        "OPENJARVIS_RUN_SLOW_TESTS",
+        "set OPENJARVIS_RUN_SLOW_TESTS=1 or pass --run-slow",
+    ),
+    "modal": (
+        "OPENJARVIS_RUN_MODAL_TESTS",
+        "set OPENJARVIS_RUN_MODAL_TESTS=1 or pass --run-modal",
+    ),
+    "docker": (
+        "OPENJARVIS_RUN_DOCKER_TESTS",
+        "set OPENJARVIS_RUN_DOCKER_TESTS=1 or pass --run-docker",
+    ),
+    "nvidia": (
+        "OPENJARVIS_RUN_HARDWARE_TESTS",
+        "set OPENJARVIS_RUN_HARDWARE_TESTS=1 or pass --run-hardware",
+    ),
+    "amd": (
+        "OPENJARVIS_RUN_HARDWARE_TESTS",
+        "set OPENJARVIS_RUN_HARDWARE_TESTS=1 or pass --run-hardware",
+    ),
+    "apple": (
+        "OPENJARVIS_RUN_HARDWARE_TESTS",
+        "set OPENJARVIS_RUN_HARDWARE_TESTS=1 or pass --run-hardware",
+    ),
+    "macos15": (
+        "OPENJARVIS_RUN_HARDWARE_TESTS",
+        "set OPENJARVIS_RUN_HARDWARE_TESTS=1 or pass --run-hardware",
+    ),
+}
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Opt in to tests that require external services, hardware, or long runtime."""
+    parser.addoption("--run-live", action="store_true", help="run live tests")
+    parser.addoption("--run-cloud", action="store_true", help="run cloud API tests")
+    parser.addoption(
+        "--run-live-channel",
+        action="store_true",
+        help="run live channel tests",
+    )
+    parser.addoption(
+        "--run-live-external",
+        action="store_true",
+        help="run live external-framework tests",
+    )
+    parser.addoption("--run-slow", action="store_true", help="run slow tests")
+    parser.addoption("--run-modal", action="store_true", help="run Modal tests")
+    parser.addoption("--run-docker", action="store_true", help="run Docker tests")
+    parser.addoption(
+        "--run-hardware",
+        action="store_true",
+        help="run hardware-specific tests",
+    )
+
+
+def _enabled(config: pytest.Config, marker: str) -> bool:
+    env_key = _OPT_IN_MARKERS[marker][0]
+    if os.environ.get(env_key) == "1":
+        return True
+    option_name = "--run-" + marker.replace("_", "-")
+    if marker in {"nvidia", "amd", "apple", "macos15"}:
+        option_name = "--run-hardware"
+    return bool(config.getoption(option_name, default=False))
+
+
+def _has_marker(item: pytest.Item, marker: str) -> bool:
+    return item.get_closest_marker(marker) is not None
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    """Skip opt-in suites unless their local prerequisites were requested."""
+    for item in items:
+        for marker, (_env_key, reason) in _OPT_IN_MARKERS.items():
+            if _has_marker(item, marker) and not _enabled(config, marker):
+                item.add_marker(pytest.mark.skip(reason=reason))
+
+        if _has_marker(item, "docker") and shutil.which("docker") is None:
+            item.add_marker(pytest.mark.skip(reason="docker not available"))
+
+        if _has_marker(item, "macos15"):
+            is_macos15 = platform.system() == "Darwin" and platform.mac_ver()[0] >= "15"
+            if not is_macos15:
+                item.add_marker(pytest.mark.skip(reason="macOS 15+ required"))
 
 
 @pytest.fixture(autouse=True)

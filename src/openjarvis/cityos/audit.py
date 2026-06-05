@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -54,7 +53,9 @@ class CityOSAuditLogger:
     """
 
     def __init__(self, log_dir: str | None = None) -> None:
-        self._log_dir = Path(log_dir or os.environ.get("CITYOS_AUDIT_DIR", "/var/log/cityosjarvis"))
+        self._log_dir = Path(
+            log_dir or os.environ.get("CITYOS_AUDIT_DIR", "/var/log/cityosjarvis")
+        )
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._file = self._log_dir / "audit.jsonl"
 
@@ -89,12 +90,16 @@ class CityOSAuditLogger:
 
         try:
             with self._file.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(asdict(audit_event), ensure_ascii=False, default=str) + "\n")
+                f.write(
+                    json.dumps(asdict(audit_event), ensure_ascii=False, default=str)
+                    + "\n"
+                )
         except OSError as e:
             logger.error("Failed to write audit log: %s", e)
 
     def _now_iso(self) -> str:
         from datetime import datetime, timezone
+
         return datetime.now(timezone.utc).isoformat()
 
     def _sanitize(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -139,7 +144,10 @@ class CityOSAuditLogger:
                     except json.JSONDecodeError:
                         continue
 
-                    if tenant_id and record.get("actor", {}).get("tenant_id") != tenant_id:
+                    if (
+                        tenant_id
+                        and record.get("actor", {}).get("tenant_id") != tenant_id
+                    ):
                         continue
                     if event_type and record.get("event") != event_type:
                         continue

@@ -81,7 +81,9 @@ class TestGetCityosLlmConfig:
             "LITELLM_MASTER_KEY": "sk-test",
         }
         with patch.dict(os.environ, env):
-            with patch("openjarvis.cityos.llm_config._setup_gateway", side_effect=fake_setup):
+            with patch(
+                "openjarvis.cityos.llm_config._setup_gateway", side_effect=fake_setup
+            ):
                 result = get_cityos_llm_config()
 
         assert result is not None
@@ -103,7 +105,9 @@ class TestGetCityosLlmConfig:
             "OLLAMA_URL": "http://custom-ollama:11434",
         }
         with patch.dict(os.environ, env):
-            with patch("openjarvis.cityos.llm_config._setup_ollama", side_effect=fake_setup):
+            with patch(
+                "openjarvis.cityos.llm_config._setup_ollama", side_effect=fake_setup
+            ):
                 result = get_cityos_llm_config()
 
         assert result is not None

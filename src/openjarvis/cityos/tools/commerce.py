@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from openjarvis.cityos.tenant import TenantContext
+
 from .base import CityOSTool
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,9 @@ class CommerceTools(CityOSTool):
         self._bff_url = os.environ.get("CITYOS_BFF_URL", "http://localhost:4001")
         self._client: httpx.AsyncClient | None = None
 
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         query = params.get("query", "")
         results = [
             {"id": "prod-1", "name": f"{query} - Sample Product", "price": 99.99}
@@ -208,12 +211,18 @@ class CommerceTools(CityOSTool):
         return [
             {
                 "name": "commerce_search_products",
-                "description": "Search products in the commerce catalog by query and optional category",
+                "description": (
+                    "Search products in the commerce catalog by query and "
+                    "optional category"
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search query"},
-                        "category": {"type": "string", "description": "Category ID (optional)"},
+                        "category": {
+                            "type": "string",
+                            "description": "Category ID (optional)",
+                        },
                         "limit": {"type": "integer", "default": 10},
                     },
                     "required": ["query"],
@@ -237,7 +246,10 @@ class CommerceTools(CityOSTool):
                     "type": "object",
                     "properties": {
                         "user_id": {"type": "string", "description": "User ID"},
-                        "category": {"type": "string", "description": "Category filter (optional)"},
+                        "category": {
+                            "type": "string",
+                            "description": "Category filter (optional)",
+                        },
                         "limit": {"type": "integer", "default": 5},
                     },
                     "required": ["user_id"],

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -16,7 +15,9 @@ class TestMiddlewareStack:
 
         app = FastAPI()
         middleware_cls = create_security_middleware()
-        assert middleware_cls is not None, "SecurityHeadersMiddleware should be available"
+        assert middleware_cls is not None, (
+            "SecurityHeadersMiddleware should be available"
+        )
 
         app.add_middleware(middleware_cls)
 
@@ -38,6 +39,7 @@ class TestMiddlewareStack:
     def test_cors_middleware_before_auth(self) -> None:
         """CORS preflight requests should not require authentication."""
         from fastapi.middleware.cors import CORSMiddleware
+
         from openjarvis.cityos.auth import CityOSAuthMiddleware
 
         app = FastAPI()
@@ -69,7 +71,13 @@ class TestMiddlewareStack:
         """Verify middleware registration order in app.py source."""
         from pathlib import Path
 
-        app_py = Path(__file__).parent.parent.parent / "src" / "openjarvis" / "server" / "app.py"
+        app_py = (
+            Path(__file__).parent.parent.parent
+            / "src"
+            / "openjarvis"
+            / "server"
+            / "app.py"
+        )
         source = app_py.read_text()
         security_idx = source.find("create_security_middleware")
         auth_idx = source.find("CityOSAuthMiddleware")
@@ -87,7 +95,9 @@ class TestMiddlewareStack:
         @app.middleware("http")
         async def log_middleware(request, call_next):
             response = await call_next(request)
-            response.headers["x-request-id"] = request.headers.get("x-correlation-id", "none")
+            response.headers["x-request-id"] = request.headers.get(
+                "x-correlation-id", "none"
+            )
             return response
 
         @app.get("/test")

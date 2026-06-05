@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from openjarvis.cityos.audit import CityOSAuditLogger
 from openjarvis.cityos.auth import CityOSAuthMiddleware
 from openjarvis.cityos.compliance import ComplianceGate
-from openjarvis.cityos.audit import CityOSAuditLogger
 
 
 class TestMiddlewareStackOrdering:
@@ -21,6 +20,7 @@ class TestMiddlewareStackOrdering:
         async def app(scope, receive, send):
             response = JSONResponse({"status": "ok"})
             await response(scope, receive, send)
+
         return app
 
     @pytest.fixture
@@ -60,6 +60,7 @@ class TestMiddlewareStackOrdering:
 
     def test_audit_logger_writes_event(self, tmp_path):
         from openjarvis.cityos.tenant import TenantContext
+
         logger = CityOSAuditLogger(log_dir=str(tmp_path))
         tenant = TenantContext("t1", "global/sa", ["ai_user"], "u1")
         logger.log(event="test", tenant=tenant, request={}, response={})

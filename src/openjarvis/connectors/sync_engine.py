@@ -72,6 +72,19 @@ class SyncEngine:
         self._conn.execute(_CREATE_STATE_TABLE)
         self._conn.commit()
 
+    def __enter__(self) -> "SyncEngine":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close the checkpoint SQLite connection."""
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------

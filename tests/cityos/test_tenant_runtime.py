@@ -8,7 +8,6 @@ import pytest
 
 from openjarvis.cityos.tenant import TenantContext
 from openjarvis.cityos.tenant_runtime import TenantAwareAgentRunner
-from openjarvis.cityos.audit import CityOSAuditLogger
 
 
 @pytest.fixture
@@ -40,13 +39,17 @@ class TestTenantAwareAgentRunner:
         assert result["content"] == "Test response"
         mock_agent.run.assert_called_once()
 
-    def test_run_with_tenant(self, mock_agent: MagicMock, tenant: TenantContext) -> None:
+    def test_run_with_tenant(
+        self, mock_agent: MagicMock, tenant: TenantContext
+    ) -> None:
         runner = TenantAwareAgentRunner(mock_agent, tenant=tenant)
         result = runner.run("Hello", "You are a helper")
 
         assert result["content"] == "Test response"
 
-    def test_tenant_prefixes_applied(self, mock_agent: MagicMock, tenant: TenantContext) -> None:
+    def test_tenant_prefixes_applied(
+        self, mock_agent: MagicMock, tenant: TenantContext
+    ) -> None:
         runner = TenantAwareAgentRunner(mock_agent, tenant=tenant)
 
         # Mock context with memory, traces, conversation
@@ -76,7 +79,9 @@ class TestTenantAwareAgentRunner:
         # Should not modify when tenant is None
         assert mock_ctx.memory.index_name == "jarvis_memory"
 
-    def test_tool_execution_logged(self, mock_agent: MagicMock, tenant: TenantContext) -> None:
+    def test_tool_execution_logged(
+        self, mock_agent: MagicMock, tenant: TenantContext
+    ) -> None:
         # Setup agent with tool results
         mock_result = MagicMock()
         mock_result.content = "Done"

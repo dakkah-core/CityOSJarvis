@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Tuple
 
 import httpx
 
+from openjarvis.cityos import metrics as jarvis_metrics
 from openjarvis.core.registry import EngineRegistry
 from openjarvis.core.types import Message
 from openjarvis.engine._base import (
@@ -19,7 +20,6 @@ from openjarvis.engine._base import (
     messages_to_dicts,
 )
 from openjarvis.engine._stubs import StreamChunk
-from openjarvis.cityos import metrics as jarvis_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -166,8 +166,14 @@ def _serialize_anthropic_block(block: Any) -> Dict[str, Any]:
         "type": getattr(block, "type", None) or type(block).__name__,
     }
     for attr in (
-        "id", "name", "input", "text", "thinking", "signature",
-        "tool_use_id", "content",
+        "id",
+        "name",
+        "input",
+        "text",
+        "thinking",
+        "signature",
+        "tool_use_id",
+        "content",
     ):
         if not hasattr(block, attr):
             continue
@@ -974,12 +980,16 @@ class CloudEngine(InferenceEngine):
             else:
                 result = self._generate_openai(messages, **kw)
             elapsed = time.monotonic() - t0
-            jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(elapsed)
+            jarvis_metrics.PROVIDER_LATENCY.labels(
+                provider=provider, model=model
+            ).observe(elapsed)
             jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(1)
             return result
         except Exception as exc:
             elapsed = time.monotonic() - t0
-            jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(elapsed)
+            jarvis_metrics.PROVIDER_LATENCY.labels(
+                provider=provider, model=model
+            ).observe(elapsed)
             jarvis_metrics.PROVIDER_ERRORS.labels(
                 provider=provider, model=model, error_type=type(exc).__name__
             ).inc()

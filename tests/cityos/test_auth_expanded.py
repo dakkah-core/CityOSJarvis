@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
-from starlette.requests import Request
+
+import pytest
 
 from openjarvis.cityos.auth import CityOSAuthMiddleware
 from openjarvis.cityos.tenant import (
@@ -25,7 +25,9 @@ class TestAuthEdgeCases:
         assert middleware._requires_auth("/v1/health") is False
         assert middleware._requires_auth("/api/health") is False
 
-    def test_requires_auth_protected_paths(self, middleware: CityOSAuthMiddleware) -> None:
+    def test_requires_auth_protected_paths(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         assert middleware._requires_auth("/v1/chat") is True
         assert middleware._requires_auth("/api/bff/ai/chat") is True
 
@@ -33,7 +35,9 @@ class TestAuthEdgeCases:
         assert middleware._requires_auth("/") is False
         assert middleware._requires_auth("/static/file.css") is False
 
-    def test_validate_api_key_missing_auth(self, middleware: CityOSAuthMiddleware) -> None:
+    def test_validate_api_key_missing_auth(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         request = MagicMock()
         request.headers = {}
         result = middleware._validate_api_key(request)
@@ -47,7 +51,9 @@ class TestAuthEdgeCases:
         assert result is not None
         assert result.status_code == 401
 
-    def test_validate_api_key_correct_key(self, middleware: CityOSAuthMiddleware) -> None:
+    def test_validate_api_key_correct_key(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         request = MagicMock()
         request.headers = {"Authorization": "Bearer test-api-key"}
         result = middleware._validate_api_key(request)
@@ -61,7 +67,9 @@ class TestAuthEdgeCases:
         assert result.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_validate_keycloak_missing_auth(self, middleware: CityOSAuthMiddleware) -> None:
+    async def test_validate_keycloak_missing_auth(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         request = MagicMock()
         request.headers = {}
         result = await middleware._validate_keycloak(request)
@@ -69,7 +77,9 @@ class TestAuthEdgeCases:
         assert result.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_validate_keycloak_malformed_bearer(self, middleware: CityOSAuthMiddleware) -> None:
+    async def test_validate_keycloak_malformed_bearer(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         request = MagicMock()
         request.headers = {"Authorization": "Bearer"}
         result = await middleware._validate_keycloak(request)
@@ -77,7 +87,9 @@ class TestAuthEdgeCases:
         assert result.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_validate_keycloak_no_keycloak_url(self, middleware: CityOSAuthMiddleware) -> None:
+    async def test_validate_keycloak_no_keycloak_url(
+        self, middleware: CityOSAuthMiddleware
+    ) -> None:
         middleware._keycloak_url = ""
         request = MagicMock()
         request.headers = {"Authorization": "Bearer token"}

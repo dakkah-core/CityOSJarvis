@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .tenant import TenantContext
 from .audit import CityOSAuditLogger
+from .tenant import TenantContext
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +46,14 @@ class TenantAwareAgentRunner:
             logger.debug("Tenant trace table: %s", context.traces.table_name)
 
         # Prefix conversation store
-        if hasattr(context, "conversation") and hasattr(context.conversation, "session_id"):
+        if hasattr(context, "conversation") and hasattr(
+            context.conversation, "session_id"
+        ):
             original = context.conversation.session_id or "default"
             context.conversation.session_id = f"{original}_{tenant_id}"
-            logger.debug("Tenant conversation session: %s", context.conversation.session_id)
+            logger.debug(
+                "Tenant conversation session: %s", context.conversation.session_id
+            )
 
     def run(self, query: str, system_prompt: str) -> dict[str, Any]:
         """Run the agent with tenant isolation and audit logging."""

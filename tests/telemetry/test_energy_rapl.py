@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +19,11 @@ from tests.telemetry.energy_test_helpers import (
 
 _PLAT = "openjarvis.telemetry.energy_rapl.platform.system"
 _BASE = "openjarvis.telemetry.energy_rapl._RAPL_BASE"
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="RAPL sysfs fixture names contain ':' and are Linux-specific",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -158,9 +164,7 @@ class TestSampleNormalDelta:
         assert result.cpu_energy_joules == pytest.approx(100000 / 1e6)
         assert result.dram_energy_joules == pytest.approx(20000 / 1e6)
         assert result.energy_joules == pytest.approx(120000 / 1e6)
-        assert_sample_result_basics(
-            result, vendor="cpu_rapl", energy_method="rapl"
-        )
+        assert_sample_result_basics(result, vendor="cpu_rapl", energy_method="rapl")
 
 
 # ---------------------------------------------------------------------------

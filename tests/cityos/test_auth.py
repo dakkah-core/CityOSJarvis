@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -87,6 +88,21 @@ class TestKeycloakValidation:
         os.environ["KEYCLOAK_REALM"] = "cityos"
         return CityOSAuthMiddleware(app=MagicMock())
 
+    @staticmethod
+    def _jwt_with_kid(pyjwt_lib, kid: str = "key1") -> str:
+        return pyjwt_lib.encode(
+            {"sub": "user-456"},
+            "unused",
+            algorithm="HS256",
+            headers={"kid": kid},
+        )
+
+    @staticmethod
+    def _mock_jwks_set(kid: str = "key1"):
+        return SimpleNamespace(
+            keys=[SimpleNamespace(key_id=kid, key="dummy-key")],
+        )
+
     @pytest.mark.asyncio
     async def test_missing_auth_header(self, middleware):
         request = MagicMock()
@@ -111,13 +127,18 @@ class TestKeycloakValidation:
         from jwt import PyJWKSet
 
         request = MagicMock()
-        request.headers = {"Authorization": "Bearer expired-token"}
+        request.headers = {"Authorization": f"Bearer {self._jwt_with_kid(pyjwt_lib)}"}
 
-        mock_jwk_set = MagicMock()
-        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
         with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-            with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
-                with patch("openjarvis.cityos.auth.pyjwt.decode", side_effect=pyjwt_lib.ExpiredSignatureError):
+            with patch.object(
+                PyJWKSet,
+                "from_dict",
+                return_value=self._mock_jwks_set(),
+            ):
+                with patch(
+                    "openjarvis.cityos.auth.pyjwt.decode",
+                    side_effect=pyjwt_lib.ExpiredSignatureError,
+                ):
                     result = await middleware._validate_keycloak(request)
 
         assert result is not None
@@ -130,13 +151,18 @@ class TestKeycloakValidation:
         from jwt import PyJWKSet
 
         request = MagicMock()
-        request.headers = {"Authorization": "Bearer bad-token"}
+        request.headers = {"Authorization": f"Bearer {self._jwt_with_kid(pyjwt_lib)}"}
 
-        mock_jwk_set = MagicMock()
-        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
         with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-            with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
-                with patch("openjarvis.cityos.auth.pyjwt.decode", side_effect=pyjwt_lib.InvalidTokenError("signature failed")):
+            with patch.object(
+                PyJWKSet,
+                "from_dict",
+                return_value=self._mock_jwks_set(),
+            ):
+                with patch(
+                    "openjarvis.cityos.auth.pyjwt.decode",
+                    side_effect=pyjwt_lib.InvalidTokenError("signature failed"),
+                ):
                     result = await middleware._validate_keycloak(request)
 
         assert result is not None
@@ -145,26 +171,32 @@ class TestKeycloakValidation:
 
     @pytest.mark.asyncio
     async def test_valid_token_sets_user(self, middleware):
+        import jwt as pyjwt_lib
         from jwt import PyJWKSet
 
         request = MagicMock()
         request.headers = {
-            "Authorization": "Bearer valid-token",
+            "Authorization": f"Bearer {self._jwt_with_kid(pyjwt_lib)}",
             "X-CityOS-Tenant-Id": "tenant-99",
             "X-CityOS-Node-Path": "global/sa/riyadh",
         }
         request.state = MagicMock()
 
-        mock_jwk_set = MagicMock()
-        mock_jwk_set.get_signing_key_from_jwt.return_value = MagicMock(key="dummy-key")
-        with patch("openjarvis.cityos.auth.pyjwt.decode", return_value={
-            "sub": "user-456",
-            "preferred_username": "alice",
-            "email": "alice@example.com",
-            "realm_access": {"roles": ["city-admin"]},
-        }):
+        with patch(
+            "openjarvis.cityos.auth.pyjwt.decode",
+            return_value={
+                "sub": "user-456",
+                "preferred_username": "alice",
+                "email": "alice@example.com",
+                "realm_access": {"roles": ["city-admin"]},
+            },
+        ):
             with patch.object(middleware, "_get_jwks", return_value={"keys": []}):
-                with patch.object(PyJWKSet, "from_dict", return_value=mock_jwk_set):
+                with patch.object(
+                    PyJWKSet,
+                    "from_dict",
+                    return_value=self._mock_jwks_set(),
+                ):
                     result = await middleware._validate_keycloak(request)
 
         assert result is None  # Success
@@ -217,7 +249,10 @@ class TestJWKS:
             await middleware._get_jwks()
 
         call_args = mock_get.call_args
-        assert "http://keycloak:8080/realms/cityos/protocol/openid-connect/certs" in str(call_args)
+        assert (
+            "http://keycloak:8080/realms/cityos/protocol/openid-connect/certs"
+            in str(call_args)
+        )
 
 
 class TestDispatch:

@@ -539,8 +539,7 @@ def run_agent(agent_id):
     updated = manager.get_agent(agent_id)
     runs = updated.get("total_runs", 0)
     console.print(
-        f"[green]✓[/green] Tick complete. "
-        f"Status: {updated['status']}, runs: {runs}"
+        f"[green]✓[/green] Tick complete. Status: {updated['status']}, runs: {runs}"
     )
 
     # Print the agent's actual output. summary_memory holds the latest tick's
@@ -835,8 +834,8 @@ def ask(agent_id, message, auto_approve):
     if auto_approve:
         executor._confirm_callback = lambda _prompt: True
     else:
-        executor._confirm_callback = (
-            lambda prompt: click.confirm(f"\n{prompt}", default=False)
+        executor._confirm_callback = lambda prompt: click.confirm(
+            f"\n{prompt}", default=False
         )
     # Run the tick with a live trace rather than blocking in silence — the
     # message we just queued is consumed as this tick's input, so the user

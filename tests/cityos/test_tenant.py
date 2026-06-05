@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from openjarvis.cityos.tenant import (
     TenantContext,
     get_tenant_context,
@@ -176,7 +174,10 @@ class TestCrossTenantAccess:
             user_sub="user-1",
         )
         # target_tenant_id starts with requester's node_path
-        assert validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah/zone-7") is True
+        assert (
+            validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah/zone-7")
+            is True
+        )
 
     def test_child_cannot_access_parent(self):
         """Child node cannot access parent node data."""
@@ -186,7 +187,9 @@ class TestCrossTenantAccess:
             realm_roles=["ai-user"],
             user_sub="user-1",
         )
-        assert validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah") is False
+        assert (
+            validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah") is False
+        )
 
     def test_sibling_denied(self):
         """Sibling tenants cannot access each other."""
@@ -196,7 +199,10 @@ class TestCrossTenantAccess:
             realm_roles=["ai-user"],
             user_sub="user-1",
         )
-        assert validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah/zone-2") is False
+        assert (
+            validate_cross_tenant_access(requester, "global/sa/riyadh/dakkah/zone-2")
+            is False
+        )
 
     def test_system_admin_can_access_any(self):
         """System admin role bypasses all tenant isolation."""

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-from openjarvis.cityos.voice_prompts import load_voice_prompt
 from openjarvis.cityos.tenant import TenantContext
+from openjarvis.cityos.voice_prompts import load_voice_prompt
 
 
 class TestVoicePrompts:

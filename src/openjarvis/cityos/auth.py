@@ -92,7 +92,16 @@ class CityOSAuthMiddleware(BaseHTTPMiddleware):
         try:
             jwks = await self._get_jwks()
             jwks_set = PyJWKSet.from_dict(jwks)
-            signing_key = jwks_set.get_signing_key_from_jwt(token)
+            header = pyjwt.get_unverified_header(token)
+            kid = header.get("kid")
+            if not kid:
+                raise pyjwt.InvalidTokenError("Token is missing kid header")
+            signing_key: Any | None = next(
+                (key for key in jwks_set.keys if getattr(key, "key_id", None) == kid),
+                None,
+            )
+            if signing_key is None:
+                raise pyjwt.InvalidTokenError("No matching signing key found")
             payload = pyjwt.decode(
                 token,
                 signing_key.key,
@@ -163,5 +172,8 @@ class CityOSAuthMiddleware(BaseHTTPMiddleware):
         )
         response = await self._jwks_client.get(jwks_url)
         response.raise_for_status()
-        self._jwks = response.json()
-        return self._jwks
+        jwks = response.json()
+        if not isinstance(jwks, dict):
+            raise ValueError("Keycloak JWKS response must be a JSON object")
+        self._jwks = jwks
+        return jwks

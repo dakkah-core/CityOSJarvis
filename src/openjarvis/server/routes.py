@@ -9,6 +9,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from openjarvis.cityos import metrics as jarvis_metrics
+from openjarvis.cityos.audit import CityOSAuditLogger
+from openjarvis.cityos.compliance import ComplianceGate
+from openjarvis.cityos.tenant import get_tenant_context
 from openjarvis.core.types import Message, Role
 from openjarvis.server.models import (
     ChatCompletionChunk,
@@ -23,11 +27,6 @@ from openjarvis.server.models import (
     StreamChoice,
     UsageInfo,
 )
-
-from openjarvis.cityos.compliance import ComplianceGate
-from openjarvis.cityos.audit import CityOSAuditLogger
-from openjarvis.cityos.tenant import get_tenant_context
-from openjarvis.cityos import metrics as jarvis_metrics
 
 router = APIRouter()
 _compliance_gate = ComplianceGate()
@@ -67,9 +66,9 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         tenant_id=tenant_id, agent_id="default", model=model
     ).inc()
     user_messages = sum(1 for m in request_body.messages if m.role == "user")
-    jarvis_metrics.CHAT_MESSAGES.labels(
-        tenant_id=tenant_id, role="user"
-    ).inc(user_messages)
+    jarvis_metrics.CHAT_MESSAGES.labels(tenant_id=tenant_id, role="user").inc(
+        user_messages
+    )
 
     # Extract last user message for compliance check
     last_user_message = ""
@@ -187,14 +186,14 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
     try:
         if request_body.stream:
             bus = getattr(request.app.state, "bus", None)
-            # Use the agent stream bridge only when tools are present (the
-            # bridge runs agent.run() synchronously and word-splits the result,
-            # so it can't stream tokens in real-time).  For plain chat, stream
-            # directly from the engine for true token-by-token output.
-            if agent is not None and bus is not None and request_body.tools:
+            # The agent bridge does not preserve OpenAI tool_calls. Explicit
+            # client-provided tools must stay on the direct engine path.
+            if agent is not None and bus is not None and not request_body.tools:
                 response = await _handle_agent_stream(agent, bus, model, request_body)
             else:
-                response = await _handle_stream(engine, model, request_body, complexity_info)
+                response = await _handle_stream(
+                    engine, model, request_body, complexity_info
+                )
 
             latency = time.perf_counter() - start_time
             latency_ms = latency * 1000
@@ -204,15 +203,20 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
             _audit_logger.log(
                 event="chat.completion",
                 tenant=tenant,
-                request={"model": model, "messages_count": len(request_body.messages), "stream": True},
+                request={
+                    "model": model,
+                    "messages_count": len(request_body.messages),
+                    "stream": True,
+                },
                 response={"status": "streaming"},
                 compliance={"gate_passed": True},
                 latency_ms=latency_ms,
             )
             return response
 
-        # Non-streaming: use agent if available, otherwise direct engine call
-        if agent is not None:
+        # Non-streaming: use agent for plain chat, but preserve explicit
+        # OpenAI tool requests on the direct engine path.
+        if agent is not None and not request_body.tools:
             response = _handle_agent(agent, model, request_body, complexity_info)
         else:
             bus = getattr(request.app.state, "bus", None)
@@ -233,13 +237,17 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         if hasattr(response, "usage") and response.usage:
             total_tokens = response.usage.total_tokens
         if total_tokens:
-            jarvis_metrics.CHAT_TOKENS.labels(
-                tenant_id=tenant_id, model=model
-            ).observe(total_tokens)
+            jarvis_metrics.CHAT_TOKENS.labels(tenant_id=tenant_id, model=model).observe(
+                total_tokens
+            )
         _audit_logger.log(
             event="chat.completion",
             tenant=tenant,
-            request={"model": model, "messages_count": len(request_body.messages), "stream": False},
+            request={
+                "model": model,
+                "messages_count": len(request_body.messages),
+                "stream": False,
+            },
             response={
                 "status": "success",
                 "choices": len(response.choices) if hasattr(response, "choices") else 0,
@@ -320,10 +328,14 @@ def _handle_direct(
         # Record tool metrics
         try:
             from openjarvis.cityos.metrics import TOOL_CALLS
+
             for tc in tool_calls:
                 tool_name = tc.get("name", "unknown")
                 TOOL_CALLS.labels(
-                    tenant_id="default", tool_name=tool_name, agent_id="default", status="called"
+                    tenant_id="default",
+                    tool_name=tool_name,
+                    agent_id="default",
+                    status="called",
                 ).inc()
         except Exception:
             pass
@@ -490,6 +502,7 @@ async def _handle_stream(
             # mis-route the request to a cloud backend (MultiEngine routing
             # confusion), which is detected by checking the routed engine's
             # is_cloud attribute.
+            full_chunk_stream = False
             if use_cloud:
                 token_iter = stream_cloud(
                     model, messages, req.temperature, req.max_tokens
@@ -518,6 +531,15 @@ async def _handle_stream(
                     token_iter = stream_local(
                         model, messages, req.temperature, req.max_tokens
                     )
+                elif req.tools and hasattr(engine, "stream_full"):
+                    full_chunk_stream = True
+                    token_iter = engine.stream_full(
+                        messages,
+                        model=model,
+                        temperature=req.temperature,
+                        max_tokens=req.max_tokens,
+                        tools=req.tools,
+                    )
                 else:
                     token_iter = engine.stream(
                         messages,
@@ -525,7 +547,30 @@ async def _handle_stream(
                         temperature=req.temperature,
                         max_tokens=req.max_tokens,
                     )
+            final_finish_reason = "stop"
             async for token in token_iter:
+                if full_chunk_stream:
+                    delta_data: dict[str, Any] = {}
+                    if token.content is not None:
+                        delta_data["content"] = token.content
+                    if token.tool_calls:
+                        delta_data["tool_calls"] = token.tool_calls
+                    if token.finish_reason:
+                        final_finish_reason = token.finish_reason
+                    if not delta_data and token.finish_reason is None:
+                        continue
+                    chunk = ChatCompletionChunk(
+                        id=chunk_id,
+                        model=model,
+                        choices=[
+                            StreamChoice(
+                                delta=DeltaMessage(**delta_data),
+                                finish_reason=token.finish_reason,
+                            )
+                        ],
+                    )
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    continue
                 chunk = ChatCompletionChunk(
                     id=chunk_id,
                     model=model,
@@ -571,7 +616,7 @@ async def _handle_stream(
             choices=[
                 StreamChoice(
                     delta=DeltaMessage(),
-                    finish_reason="stop",
+                    finish_reason=final_finish_reason,
                 )
             ],
         )

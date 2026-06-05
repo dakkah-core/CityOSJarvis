@@ -172,6 +172,10 @@ def ingest_path(
         raise FileNotFoundError(f"Path not found: {path}")
 
     if path.is_file():
+        from openjarvis.security.file_policy import is_sensitive_file
+
+        if is_sensitive_file(path):
+            return []
         text, _meta = read_document(path)
         return chunk_text(text, source=str(path), config=config)
 

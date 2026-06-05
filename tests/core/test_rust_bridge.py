@@ -7,11 +7,22 @@ import json
 import pytest
 
 
+def _require_rust_module():
+    return pytest.importorskip(
+        "openjarvis_rust",
+        reason=(
+            "Rust extension not installed; run "
+            "`uv run maturin develop -m rust/crates/openjarvis-python/Cargo.toml`"
+        ),
+    )
+
+
 class TestGetRustModule:
     """Test get_rust_module() returns the Rust extension module."""
 
     def test_returns_rust_module(self):
         """get_rust_module() returns the openjarvis_rust module."""
+        _require_rust_module()
         from openjarvis._rust_bridge import get_rust_module
 
         get_rust_module.cache_clear()
@@ -250,6 +261,7 @@ class TestRustBackedModules:
 
     def test_secret_scanner_uses_rust(self):
         """SecretScanner uses Rust backend."""
+        _require_rust_module()
         from openjarvis.security.scanner import SecretScanner
 
         scanner = SecretScanner()
@@ -258,6 +270,7 @@ class TestRustBackedModules:
 
     def test_injection_scanner_uses_rust(self):
         """InjectionScanner uses Rust backend."""
+        _require_rust_module()
         from openjarvis.security.injection_scanner import InjectionScanner
 
         scanner = InjectionScanner()
@@ -266,6 +279,7 @@ class TestRustBackedModules:
 
     def test_rate_limiter_uses_rust(self):
         """RateLimiter uses Rust backend."""
+        _require_rust_module()
         from openjarvis.security.rate_limiter import RateLimiter
 
         limiter = RateLimiter()

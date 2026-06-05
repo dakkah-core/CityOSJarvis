@@ -272,13 +272,17 @@ class TestEnvironmentConfig:
             mp.setenv("CITYOS_AUDIT_DIR", "/tmp/test-audit-logs")
             logger = CityOSAuditLogger()
             # Use normpath for cross-platform comparison
-            assert os.path.normpath(str(logger._log_dir)) == os.path.normpath("/tmp/test-audit-logs")
+            assert os.path.normpath(str(logger._log_dir)) == os.path.normpath(
+                "/tmp/test-audit-logs"
+            )
 
     def test_uses_default_when_no_env(self):
         # Ensure env var is not set
         os.environ.pop("CITYOS_AUDIT_DIR", None)
         logger = CityOSAuditLogger()
-        assert os.path.normpath(str(logger._log_dir)) == os.path.normpath("/var/log/cityosjarvis")
+        assert os.path.normpath(str(logger._log_dir)) == os.path.normpath(
+            "/var/log/cityosjarvis"
+        )
 
     def test_log_dir_created(self, temp_log_dir):
         subdir = Path(temp_log_dir) / "nested" / "audit"

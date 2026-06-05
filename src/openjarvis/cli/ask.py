@@ -151,9 +151,7 @@ def _run_research(
             trace.print(f"  [dim]↳ Found {n} {label}[/dim]")
         elif etype == "clarify_call":
             q = event.get("question", "") or ""
-            trace.print(
-                f"  [dim]↳ Clarifying:[/dim] [dim italic]{q}[/dim italic]"
-            )
+            trace.print(f"  [dim]↳ Clarifying:[/dim] [dim italic]{q}[/dim italic]")
         # final_answer and clarify_response are handled outside the loop.
 
     agent = ResearchAgent(

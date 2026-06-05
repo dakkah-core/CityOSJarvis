@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import base64
-import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from openjarvis.cityos.voice_service import router
-
 
 app = FastAPI()
 app.include_router(router)
@@ -44,7 +41,9 @@ class TestVoiceService:
         mock_get_model.return_value = mock_model
 
         audio_b64 = base64.b64encode(b"fake audio data").decode()
-        response = client.post("/v1/voice/stt", json={"audio": audio_b64, "language": "en"})
+        response = client.post(
+            "/v1/voice/stt", json={"audio": audio_b64, "language": "en"}
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -62,7 +61,9 @@ class TestVoiceService:
         assert response.status_code in [400, 422, 503]
 
     def test_tts_with_arabic_text(self) -> None:
-        response = client.post("/v1/voice/speak", json={"text": "مرحبا", "language": "ar"})
+        response = client.post(
+            "/v1/voice/speak", json={"text": "مرحبا", "language": "ar"}
+        )
         # May succeed or fail depending on TTS config
         assert response.status_code in [200, 404, 503]
 
@@ -104,7 +105,9 @@ class TestVoiceService:
         mock_get_model.return_value = mock_model
 
         audio_b64 = base64.b64encode(b"fake audio data").decode()
-        response = client.post("/v1/voice/stt", json={"audio": audio_b64, "language": "ar"})
+        response = client.post(
+            "/v1/voice/stt", json={"audio": audio_b64, "language": "ar"}
+        )
 
         assert response.status_code == 200
         data = response.json()

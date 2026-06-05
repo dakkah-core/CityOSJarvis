@@ -20,7 +20,9 @@ class CityOSTool(ABC):
     parameters: dict[str, Any] = {}
 
     @abstractmethod
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         """Execute the tool and return a result dict.
 
         Args:

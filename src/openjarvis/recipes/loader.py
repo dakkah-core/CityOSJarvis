@@ -10,6 +10,7 @@ and carries a ``kind`` that determines its lifecycle:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -157,6 +158,29 @@ class Recipe:
 # ------------------------------------------------------------------ #
 
 
+def _load_toml_file(path: Path) -> Dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        if "Unescaped '\\'" not in str(exc):
+            raise
+
+        def escape_prompt_path(match: re.Match[str]) -> str:
+            escaped_path = match.group(2).replace("\\", "\\\\")
+            return f'{match.group(1)}"{escaped_path}"'
+
+        fixed_text = re.sub(
+            r'(^\s*system_prompt_path\s*=\s*)"([^"\n]*\\[^"\n]*)"',
+            escape_prompt_path,
+            text,
+            flags=re.MULTILINE,
+        )
+        if fixed_text == text:
+            raise
+        return tomllib.loads(fixed_text)
+
+
 def load_recipe(path: str | Path) -> Recipe:
     """Load a recipe from a TOML file.
 
@@ -172,8 +196,7 @@ def load_recipe(path: str | Path) -> Recipe:
     if not path.exists():
         raise FileNotFoundError(f"Recipe file not found: {path}")
 
-    with open(path, "rb") as fh:
-        data = tomllib.load(fh)
+    data = _load_toml_file(path)
 
     # Auto-detect legacy operator manifests ([operator] key)
     if "operator" in data and "recipe" not in data:

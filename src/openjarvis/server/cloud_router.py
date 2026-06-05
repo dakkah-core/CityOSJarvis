@@ -15,8 +15,8 @@ from typing import Any, Sequence
 
 import httpx
 
-from openjarvis.core.types import Message
 from openjarvis.cityos import metrics as jarvis_metrics
+from openjarvis.core.types import Message
 
 # ---------------------------------------------------------------------------
 # Key / provider detection
@@ -381,7 +381,9 @@ async def stream_cloud(
             keys = _load_keys()
             api_key = keys.get("MINIMAX_API_KEY", "")
             if not api_key:
-                raise ValueError("MINIMAX_API_KEY not set — add it in the Cloud Models tab")
+                raise ValueError(
+                    "MINIMAX_API_KEY not set — add it in the Cloud Models tab"
+                )
             token_iter = _stream_openai(
                 model,
                 messages,
@@ -396,8 +398,12 @@ async def stream_cloud(
         async for token in token_iter:
             if first_token:
                 ttft = time.perf_counter() - t0
-                jarvis_metrics.PROVIDER_LATENCY.labels(provider=provider, model=model).observe(ttft)
-                jarvis_metrics.PROVIDER_HEALTH.labels(provider=provider, model=model).set(1)
+                jarvis_metrics.PROVIDER_LATENCY.labels(
+                    provider=provider, model=model
+                ).observe(ttft)
+                jarvis_metrics.PROVIDER_HEALTH.labels(
+                    provider=provider, model=model
+                ).set(1)
                 first_token = False
             yield token
     except Exception as exc:

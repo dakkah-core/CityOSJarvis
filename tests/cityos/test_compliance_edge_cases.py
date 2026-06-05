@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from openjarvis.cityos.compliance import ComplianceGate, ClassificationResult
+from openjarvis.cityos.compliance import ClassificationResult, ComplianceGate
 
 
 class TestComplianceEdgeCases:
@@ -70,7 +70,9 @@ class TestComplianceEdgeCases:
 
     def test_jwt_token_variations(self, gate: ComplianceGate) -> None:
         # Valid JWT format
-        result = gate.classify("Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.signature")
+        result = gate.classify(
+            "Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.signature"
+        )
         assert not result.allowed
 
     def test_phone_number_variations(self, gate: ComplianceGate) -> None:

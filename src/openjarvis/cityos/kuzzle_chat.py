@@ -5,7 +5,7 @@ and CityOS mobile/web clients via Kuzzle.
 
 Usage:
     from openjarvis.cityos.kuzzle_chat import KuzzleChatManager
-    
+
     manager = KuzzleChatManager()
     await manager.publish_message(
         conversation_id="conv-123",
@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any

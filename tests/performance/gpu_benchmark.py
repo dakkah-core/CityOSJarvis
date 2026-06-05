@@ -6,7 +6,6 @@ Run with: uv run pytest tests/performance/gpu_benchmark.py -v -s
 
 from __future__ import annotations
 
-import gc
 import logging
 import os
 import time
@@ -35,6 +34,7 @@ class GPUBenchmarkResult:
 def _has_cuda() -> bool:
     try:
         import torch  # type: ignore[import-untyped]
+
         return torch.cuda.is_available()
     except ImportError:
         return False
@@ -43,6 +43,7 @@ def _has_cuda() -> bool:
 def _get_gpu_memory_mb() -> float | None:
     try:
         import torch  # type: ignore[import-untyped]
+
         if torch.cuda.is_available():
             return torch.cuda.max_memory_allocated() / 1024 / 1024
     except ImportError:
@@ -53,6 +54,7 @@ def _get_gpu_memory_mb() -> float | None:
 def _reset_gpu_memory() -> None:
     try:
         import torch  # type: ignore[import-untyped]
+
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.empty_cache()
@@ -63,7 +65,9 @@ def _reset_gpu_memory() -> None:
 class GPUBenchmark:
     """Benchmark vLLM inference throughput and memory."""
 
-    def __init__(self, model: str = "meta-llama/Llama-2-7b-chat-hf", max_tokens: int = 256) -> None:
+    def __init__(
+        self, model: str = "meta-llama/Llama-2-7b-chat-hf", max_tokens: int = 256
+    ) -> None:
         self.model = model
         self.max_tokens = max_tokens
         self._llm: Any | None = None
@@ -74,6 +78,7 @@ class GPUBenchmark:
             return self._llm
         try:
             from vllm import LLM  # type: ignore[import-untyped]
+
             self._llm = LLM(
                 model=self.model,
                 tensor_parallel_size=int(os.environ.get("VLLM_TP_SIZE", "1")),
@@ -128,7 +133,9 @@ class GPUBenchmark:
             errors=errors,
         )
 
-    def benchmark_memory(self, prompt: str = "Explain quantum computing in detail.") -> dict[str, Any]:
+    def benchmark_memory(
+        self, prompt: str = "Explain quantum computing in detail."
+    ) -> dict[str, Any]:
         """Track peak GPU memory for a single generation."""
         llm = self._get_llm()
         _reset_gpu_memory()
@@ -145,7 +152,9 @@ class GPUBenchmark:
             "peak_memory_mb": peak,
         }
 
-    def benchmark_batch_efficiency(self, prompts: list[str]) -> list[GPUBenchmarkResult]:
+    def benchmark_batch_efficiency(
+        self, prompts: list[str]
+    ) -> list[GPUBenchmarkResult]:
         """Compare throughput at different batch sizes."""
         results: list[GPUBenchmarkResult] = []
         for bs in [1, 2, 4, 8, 16]:

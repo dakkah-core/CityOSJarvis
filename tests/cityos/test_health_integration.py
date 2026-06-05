@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 
 class TestHealthResponseStructure:
     def test_health_json_structure(self) -> None:
@@ -24,8 +22,6 @@ class TestHealthResponseStructure:
 
     def test_health_has_required_fields(self) -> None:
         required_fields = ["status"]
-        # Optional but common fields
-        optional_fields = ["version", "uptime_seconds", "timestamp"]
         assert len(required_fields) > 0
 
     def test_health_response_time_fast(self) -> None:

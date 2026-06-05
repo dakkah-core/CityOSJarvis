@@ -1526,8 +1526,7 @@ def summarize(jsonl_path):
     default=None,
     type=click.Path(),
     help=(
-        "Output JSONL path. Defaults to <jsonl>.reparsed when "
-        "--in-place is not set."
+        "Output JSONL path. Defaults to <jsonl>.reparsed when --in-place is not set."
     ),
 )
 @click.option(
@@ -1642,9 +1641,7 @@ def reparse_judge(jsonl_path, out_path, in_place, summary_out):
         _json.dump(summary, f, indent=2)
 
     old_cont = [float(s) for s in old_scores if s is not None]
-    old_acc = (
-        sum(1 for s in old_cont if s >= 0.5) / len(old_cont) if old_cont else 0.0
-    )
+    old_acc = sum(1 for s in old_cont if s >= 0.5) / len(old_cont) if old_cont else 0.0
     old_mean = sum(old_cont) / len(old_cont) if old_cont else 0.0
     new_mean = sum(cont) / len(cont) if cont else 0.0
     mean_shift = new_mean - old_mean

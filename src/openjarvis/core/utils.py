@@ -9,7 +9,9 @@ from __future__ import annotations
 import platform
 import shutil
 import subprocess
+import sys
 import webbrowser
+from pathlib import Path
 
 
 def get_python_executable() -> str:
@@ -26,6 +28,8 @@ def get_python_executable() -> str:
     (:func:`shlex.quote`) before being interpolated into a ``shell=True``
     command string — paths on Windows often contain spaces.
     """
+    if sys.executable and Path(sys.executable).exists():
+        return sys.executable
     return shutil.which("python3") or shutil.which("python") or "python3"
 
 

@@ -13,7 +13,7 @@ import argparse
 import json
 import random
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
 class MockLLMHandler(BaseHTTPRequestHandler):
@@ -87,14 +87,22 @@ class MockLLMHandler(BaseHTTPRequestHandler):
             words = f"This is a mock response to: {message}".split()
             self._send_sse(words)
         else:
-            self._send_json(200, {
-                "role": "assistant",
-                "content": f"This is a mock response to: {message}",
-                "usage": {"prompt_tokens": len(message.split()), "completion_tokens": 10},
-            })
+            self._send_json(
+                200,
+                {
+                    "role": "assistant",
+                    "content": f"This is a mock response to: {message}",
+                    "usage": {
+                        "prompt_tokens": len(message.split()),
+                        "completion_tokens": 10,
+                    },
+                },
+            )
 
 
-def run_server(port: int, min_latency: float, max_latency: float, error_rate: float) -> None:
+def run_server(
+    port: int, min_latency: float, max_latency: float, error_rate: float
+) -> None:
     MockLLMHandler.min_latency_ms = min_latency
     MockLLMHandler.max_latency_ms = max_latency
     MockLLMHandler.error_rate = error_rate
@@ -115,9 +123,15 @@ def run_server(port: int, min_latency: float, max_latency: float, error_rate: fl
 def main() -> None:
     parser = argparse.ArgumentParser(description="Mock LLM Backend")
     parser.add_argument("--port", type=int, default=8080, help="Port to listen on")
-    parser.add_argument("--min-latency", type=float, default=50.0, help="Minimum latency in ms")
-    parser.add_argument("--max-latency", type=float, default=500.0, help="Maximum latency in ms")
-    parser.add_argument("--error-rate", type=float, default=0.0, help="Error rate (0-1)")
+    parser.add_argument(
+        "--min-latency", type=float, default=50.0, help="Minimum latency in ms"
+    )
+    parser.add_argument(
+        "--max-latency", type=float, default=500.0, help="Maximum latency in ms"
+    )
+    parser.add_argument(
+        "--error-rate", type=float, default=0.0, help="Error rate (0-1)"
+    )
     args = parser.parse_args()
 
     run_server(args.port, args.min_latency, args.max_latency, args.error_rate)

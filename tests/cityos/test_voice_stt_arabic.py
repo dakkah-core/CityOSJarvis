@@ -11,6 +11,7 @@ from openjarvis.cityos.voice_service import router
 @pytest.fixture
 def client() -> TestClient:
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
@@ -19,6 +20,7 @@ def client() -> TestClient:
 def _make_stt_payload(text: str, language: str = "ar") -> dict:
     """Create a mock STT request payload with base64-encoded dummy audio."""
     import base64
+
     dummy_audio = base64.b64encode(b"RIFF" + b"\x00" * 100).decode("utf-8")
     return {"audio": dummy_audio, "language": language}
 
@@ -27,8 +29,8 @@ class TestSTTArabicParsing:
     """Verify that STT responses include Arabic intent data when language is Arabic."""
 
     def test_stt_response_includes_intent_when_arabic(self, client: TestClient) -> None:
-        """When language is 'ar', response should include intent/entities/confidence/dialect."""
-        # This test validates the response schema; actual transcription depends on the model
+        """Arabic STT responses should include intent/entity metadata."""
+        # Actual transcription depends on the model; this validates the schema.
         payload = _make_stt_payload("", language="ar")
         response = client.post("/v1/voice/stt", json=payload)
 

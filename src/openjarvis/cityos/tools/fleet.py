@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from openjarvis.cityos.tenant import TenantContext
+
 from .base import CityOSTool
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,10 @@ class FleetTools(CityOSTool):
         "type": "object",
         "properties": {
             "vehicle_id": {"type": "string", "description": "Vehicle identifier"},
-            "tracking_number": {"type": "string", "description": "Delivery tracking number"},
+            "tracking_number": {
+                "type": "string",
+                "description": "Delivery tracking number",
+            },
         },
         "required": ["vehicle_id"],
     }
@@ -35,14 +39,20 @@ class FleetTools(CityOSTool):
         self._bff_url = os.environ.get("CITYOS_BFF_URL", "http://localhost:4001")
         self._client: httpx.AsyncClient | None = None
 
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         vehicle_id = params.get("vehicle_id", "")
         tracking_number = params.get("tracking_number", "")
         result: dict[str, Any] = {
             "success": True,
             "vehicle_id": vehicle_id or "VH-001",
             "status": "active",
-            "location": {"lat": 24.7136, "lng": 46.6753, "address": "Riyadh, Saudi Arabia"},
+            "location": {
+                "lat": 24.7136,
+                "lng": 46.6753,
+                "address": "Riyadh, Saudi Arabia",
+            },
         }
         if tracking_number:
             result["tracking_number"] = tracking_number
@@ -245,7 +255,11 @@ class FleetTools(CityOSTool):
                                 },
                             },
                         },
-                        "optimize_for": {"type": "string", "enum": ["time", "distance", "fuel"], "default": "time"},
+                        "optimize_for": {
+                            "type": "string",
+                            "enum": ["time", "distance", "fuel"],
+                            "default": "time",
+                        },
                     },
                     "required": ["waypoints"],
                 },
@@ -270,7 +284,16 @@ class FleetTools(CityOSTool):
                     "properties": {
                         "vehicle_id": {"type": "string"},
                         "driver_id": {"type": "string"},
-                        "incident_type": {"type": "string", "enum": ["accident", "breakdown", "violation", "theft", "other"]},
+                        "incident_type": {
+                            "type": "string",
+                            "enum": [
+                                "accident",
+                                "breakdown",
+                                "violation",
+                                "theft",
+                                "other",
+                            ],
+                        },
                         "description": {"type": "string"},
                         "location": {
                             "type": "object",
@@ -280,7 +303,12 @@ class FleetTools(CityOSTool):
                             },
                         },
                     },
-                    "required": ["vehicle_id", "driver_id", "incident_type", "description"],
+                    "required": [
+                        "vehicle_id",
+                        "driver_id",
+                        "incident_type",
+                        "description",
+                    ],
                 },
             },
             {
@@ -289,7 +317,10 @@ class FleetTools(CityOSTool):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                        "severity": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high", "critical"],
+                        },
                     },
                 },
             },

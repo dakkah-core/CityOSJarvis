@@ -14,18 +14,19 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Lazy import to avoid circular dependency at module load time
 _COMPLIANCE_CHECKS = None
 
+
 def _get_compliance_counter():
     global _COMPLIANCE_CHECKS
     if _COMPLIANCE_CHECKS is None:
         try:
             from openjarvis.cityos.metrics import COMPLIANCE_CHECKS
+
             _COMPLIANCE_CHECKS = COMPLIANCE_CHECKS
         except Exception:
             pass
@@ -61,30 +62,59 @@ class ComplianceGate:
         (re.compile(r"\b\d{2}-\d{7}\b"), "Saudi national ID (old format)"),
         # Credit card numbers (Luhn-ish)
         (re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b"), "Credit card number"),
-        (re.compile(r"\b3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}\b"), "American Express card number"),
+        (
+            re.compile(r"\b3[47]\d{2}[-\s]?\d{6}[-\s]?\d{5}\b"),
+            "American Express card number",
+        ),
         # IBAN (SA prefix)
         (re.compile(r"\bSA\d{22}\b", re.IGNORECASE), "Saudi IBAN"),
         # Phone numbers (Saudi formats)
         (re.compile(r"\b05\d{8}\b"), "Saudi mobile number"),
         (re.compile(r"(?:^|\s|\+)966\s?5\d{8}\b"), "Saudi mobile number (intl)"),
         # Email addresses
-        (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "Email address"),
+        (
+            re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+            "Email address",
+        ),
         # API keys / secrets (heuristic)
         (re.compile(r"\b(sk-[a-zA-Z0-9]{20,})\b"), "API key pattern"),
         (re.compile(r"\b[ A-Za-z0-9_]{20,}=[A-Za-z0-9+/]{20,}\b"), "Encoded secret"),
         # JWT-looking tokens
-        (re.compile(r"\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\b"), "JWT token pattern"),
+        (
+            re.compile(r"\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\b"),
+            "JWT token pattern",
+        ),
     ]
 
     # Healthcare-related keywords that trigger restricted classification
     _HEALTH_KEYWORDS: list[str] = [
-        "diagnosis", "prescription", "medication", "patient record",
-        "medical history", "lab result", "blood test", "x-ray",
-        "symptoms", "treatment plan", "clinical note", "hospital admission",
-        "surgery", "operation",
-        "تشخيص", "وصفة طبية", "دواء", "سجل مريض", "تاريخ طبي",
-        "نتيجة مختبر", "اختبار دم", "أشعة", "أعراض", "خطة علاج", "ملاحظة سريرية",
-        "عملية جراحية", "جراحة",
+        "diagnosis",
+        "prescription",
+        "medication",
+        "patient record",
+        "medical history",
+        "lab result",
+        "blood test",
+        "x-ray",
+        "symptoms",
+        "treatment plan",
+        "clinical note",
+        "hospital admission",
+        "surgery",
+        "operation",
+        "تشخيص",
+        "وصفة طبية",
+        "دواء",
+        "سجل مريض",
+        "تاريخ طبي",
+        "نتيجة مختبر",
+        "اختبار دم",
+        "أشعة",
+        "أعراض",
+        "خطة علاج",
+        "ملاحظة سريرية",
+        "عملية جراحية",
+        "جراحة",
     ]
 
     def classify(self, payload: str) -> ClassificationResult:
@@ -116,9 +146,14 @@ class ComplianceGate:
 
         # 2. Check health keywords (PHI indicator)
         lower_payload = payload.lower()
-        health_matches = [kw for kw in self._HEALTH_KEYWORDS if kw.lower() in lower_payload]
+        health_matches = [
+            kw for kw in self._HEALTH_KEYWORDS if kw.lower() in lower_payload
+        ]
         if health_matches:
-            logger.warning("Compliance gate restricted: health keywords detected: %s", health_matches)
+            logger.warning(
+                "Compliance gate restricted: health keywords detected: %s",
+                health_matches,
+            )
             if counter:
                 counter.labels(result="blocked", category="regulated").inc()
             return ClassificationResult(
@@ -153,6 +188,7 @@ class ComplianceGate:
         redacted = pattern.sub("[REDACTED]", payload)
         try:
             from openjarvis.cityos.metrics import PII_REDACTIONS
+
             PII_REDACTIONS.labels(tenant_id="default", pii_type="auto").inc()
         except Exception:
             pass

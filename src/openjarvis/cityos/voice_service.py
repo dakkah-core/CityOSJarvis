@@ -24,20 +24,15 @@ import os
 import re
 import tempfile
 import time
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from openjarvis.agents._stubs import AgentContext
-from openjarvis.core.types import Message, Role
-
-from .tenant import TenantContext, get_tenant_context
-from .compliance import ComplianceGate
-from .audit import CityOSAuditLogger
 from . import metrics as jarvis_metrics
+from .audit import CityOSAuditLogger
+from .compliance import ComplianceGate
+from .tenant import TenantContext, get_tenant_context
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/voice", tags=["voice"])
@@ -64,13 +59,10 @@ def _get_stt_model() -> Any:
             _stt_model = WhisperModel(
                 model_size, device=device, compute_type=compute_type
             )
-            logger.info(
-                "Loaded faster-whisper model: %s on %s", model_size, device
-            )
+            logger.info("Loaded faster-whisper model: %s on %s", model_size, device)
         except ImportError:
             logger.error(
-                "faster-whisper not installed. "
-                "Install with: uv sync --extra speech"
+                "faster-whisper not installed. Install with: uv sync --extra speech"
             )
             raise
     return _stt_model
@@ -82,6 +74,7 @@ def _get_tts_backend() -> Any:
     if _tts_backend is None and ENABLE_TTS:
         try:
             from openjarvis.speech.cartesia_tts import CartesiaTTSBackend
+
             _tts_backend = CartesiaTTSBackend()
             logger.info("Loaded Cartesia TTS backend")
         except Exception as e:
@@ -105,7 +98,7 @@ def _build_ssml(text: str, pause_ms: int = 400) -> str:
 
 def _detect_language(text: str) -> str:
     """Detect if text is primarily Arabic or English."""
-    arabic_chars = sum(1 for c in text if "\u0600" <= c <= "\u06FF")
+    arabic_chars = sum(1 for c in text if "\u0600" <= c <= "\u06ff")
     total_chars = len(text.strip())
     if total_chars == 0:
         return "en"
@@ -116,7 +109,9 @@ def _intent_to_query(intent: str, params: dict[str, Any]) -> str:
     """Convert structured voice intent to natural language for the agent."""
     intent_map: dict[str, str] = {
         "city.services.list": "What city services are available?",
-        "permit.status.check": f"What is the status of permit {params.get('permit_id', '')}?",
+        "permit.status.check": (
+            f"What is the status of permit {params.get('permit_id', '')}?"
+        ),
         "prayer.times.today": "What are the prayer times today?",
         "traffic.report": "Report a traffic issue",
         "waste.schedule": "When is waste collection?",
@@ -182,6 +177,7 @@ def _generate_suggestions(intent: str, _response_text: str) -> list[str]:
 def _load_voice_system_prompt(tenant: TenantContext | None) -> str:
     """Load the CityOS voice-optimized system prompt."""
     from .voice_prompts import load_voice_prompt
+
     return load_voice_prompt("citizen-support", tenant=tenant)
 
 
@@ -193,6 +189,7 @@ def _run_agent_sync(
 ) -> dict[str, Any]:
     """Run the agent synchronously with tenant isolation (called in thread pool)."""
     from .tenant_runtime import TenantAwareAgentRunner
+
     runner = TenantAwareAgentRunner(agent, tenant)
     return runner.run(query, system_prompt)
 
@@ -244,6 +241,7 @@ async def process_intent(
 
     # Try Arabic parser first
     from .voice_arabic import parse_arabic_intent
+
     ar_result = parse_arabic_intent(user_query)
     if ar_result and ar_result.confidence > 0.6:
         intent = ar_result.intent
@@ -373,9 +371,7 @@ async def process_intent(
             response={"status": "error", "error": str(e)},
             latency_ms=latency_ms,
         )
-        raise HTTPException(
-            status_code=500, detail="Voice processing failed"
-        ) from e
+        raise HTTPException(status_code=500, detail="Voice processing failed") from e
 
 
 @router.post("/speak")
@@ -392,7 +388,9 @@ async def speak(
         outputFormat: str  -- "mp3" or "pcm_f32le" (default: mp3)
     """
     if not ENABLE_TTS:
-        raise HTTPException(status_code=503, detail="TTS is not enabled. Set ENABLE_TTS=true")
+        raise HTTPException(
+            status_code=503, detail="TTS is not enabled. Set ENABLE_TTS=true"
+        )
 
     text = body.get("text", "")
     if not text:
@@ -414,13 +412,15 @@ async def speak(
             output_format=output_format,
         )
         audio_b64 = base64.b64encode(result.audio).decode("utf-8")
-        return JSONResponse({
-            "audioBase64": audio_b64,
-            "audioFormat": result.format,
-            "voiceId": result.voice_id,
-            "language": lang,
-            "durationEstimate": len(text.split()) * 0.4,  # rough heuristic
-        })
+        return JSONResponse(
+            {
+                "audioBase64": audio_b64,
+                "audioFormat": result.format,
+                "voiceId": result.voice_id,
+                "language": lang,
+                "durationEstimate": len(text.split()) * 0.4,  # rough heuristic
+            }
+        )
     except Exception as e:
         logger.exception("TTS synthesis failed")
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}") from e
@@ -467,9 +467,7 @@ async def speech_to_text(
             f.write(audio_bytes)
             temp_path = f.name
 
-        segments, info = model.transcribe(
-            temp_path, language=language, beam_size=5
-        )
+        segments, info = model.transcribe(temp_path, language=language, beam_size=5)
         text = " ".join([segment.text for segment in segments])
 
         os.unlink(temp_path)
@@ -483,6 +481,7 @@ async def speech_to_text(
         # Parse Arabic intent when language is Arabic
         if info.language == "ar" or language == "ar":
             from .voice_arabic import parse_arabic_intent
+
             ar_result = parse_arabic_intent(text)
             if ar_result:
                 response_payload["intent"] = ar_result.intent
@@ -494,9 +493,7 @@ async def speech_to_text(
 
     except Exception as e:
         logger.exception("STT failed")
-        raise HTTPException(
-            status_code=500, detail="Speech recognition failed"
-        ) from e
+        raise HTTPException(status_code=500, detail="Speech recognition failed") from e
 
 
 # Re-export for app.py registration

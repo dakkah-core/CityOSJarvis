@@ -98,9 +98,7 @@ class SkillOptimizer:
             except Exception:
                 pass
             if overlay_dir is None:
-                overlay_dir = Path(
-                    "~/.openjarvis/learning/skills/"
-                ).expanduser()
+                overlay_dir = Path("~/.openjarvis/learning/skills/").expanduser()
         overlay_dir = Path(overlay_dir).expanduser()
 
         traces = trace_store.list_traces(limit=10000)

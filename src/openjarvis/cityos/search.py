@@ -6,6 +6,7 @@ so they are searchable from CityOS portals.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from typing import Any
@@ -30,8 +31,7 @@ class CityOSSearch:
         if self._client is not None:
             return self._client
         try:
-            import meilisearch
-
+            meilisearch = importlib.import_module("meilisearch")
             self._client = meilisearch.Client(self._url, self._api_key)
             return self._client
         except Exception as e:
@@ -67,8 +67,7 @@ class CityOSSearch:
 
             # Build searchable document
             content = "\n".join(
-                f"{m.get('role', 'unknown')}: {m.get('content', '')}"
-                for m in messages
+                f"{m.get('role', 'unknown')}: {m.get('content', '')}" for m in messages
             )
 
             doc = {
@@ -82,7 +81,11 @@ class CityOSSearch:
             }
 
             index.add_documents([doc])
-            logger.info("Indexed conversation %s for tenant %s", conversation_id, tenant.tenant_id)
+            logger.info(
+                "Indexed conversation %s for tenant %s",
+                conversation_id,
+                tenant.tenant_id,
+            )
             return True
         except Exception as e:
             logger.warning("Failed to index conversation: %s", e)
@@ -103,13 +106,17 @@ class CityOSSearch:
 
         try:
             index = client.index(index_name)
-            results = index.search(query, {"limit": limit, "filter": f"tenant_id = {tenant.tenant_id}"})
+            results = index.search(
+                query, {"limit": limit, "filter": f"tenant_id = {tenant.tenant_id}"}
+            )
             return results.get("hits", [])
         except Exception as e:
             logger.warning("Search failed: %s", e)
             return []
 
-    async def delete_conversation(self, tenant: TenantContext, conversation_id: str) -> bool:
+    async def delete_conversation(
+        self, tenant: TenantContext, conversation_id: str
+    ) -> bool:
         """Delete a conversation from the search index."""
         client = self._get_client()
         if client is None:

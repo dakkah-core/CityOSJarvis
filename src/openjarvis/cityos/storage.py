@@ -6,6 +6,7 @@ with tenant-scoped bucket prefixes.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import mimetypes
 import os
@@ -40,9 +41,10 @@ class CityOSStorage:
         if not self._endpoint or not self._access_key:
             return None
         try:
-            from minio import Minio
+            minio_module = importlib.import_module("minio")
+            minio_cls = getattr(minio_module, "Minio")
 
-            self._client = Minio(
+            self._client = minio_cls(
                 self._endpoint,
                 access_key=self._access_key,
                 secret_key=self._secret_key,
@@ -78,7 +80,9 @@ class CityOSStorage:
             dict with "url", "bucket", "object_name", "fallback" keys
         """
         if content_type is None:
-            content_type = mimetypes.guess_type(object_name)[0] or "application/octet-stream"
+            content_type = (
+                mimetypes.guess_type(object_name)[0] or "application/octet-stream"
+            )
 
         client = self._get_client()
         bucket = self._bucket_name(tenant_id, purpose)
@@ -131,14 +135,14 @@ class CityOSStorage:
 
         if client is not None:
             try:
-                from io import BytesIO
-
                 response = client.get_object(bucket, object_name)
                 return response.read()
             except Exception as e:
                 logger.warning("MinIO download failed, trying fallback: %s", e)
 
-        fallback_path = os.path.join(self._fallback_dir, tenant_id, purpose, object_name)
+        fallback_path = os.path.join(
+            self._fallback_dir, tenant_id, purpose, object_name
+        )
         with open(fallback_path, "rb") as f:
             return f.read()
 
@@ -154,7 +158,9 @@ class CityOSStorage:
             except Exception as e:
                 logger.warning("MinIO delete failed: %s", e)
 
-        fallback_path = os.path.join(self._fallback_dir, tenant_id, purpose, object_name)
+        fallback_path = os.path.join(
+            self._fallback_dir, tenant_id, purpose, object_name
+        )
         if os.path.exists(fallback_path):
             os.remove(fallback_path)
             return True

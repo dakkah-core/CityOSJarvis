@@ -11,18 +11,14 @@ import datetime as _dt
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import click
 
 import openjarvis
-from openjarvis.core import config as _cfg
-from openjarvis.core.config import (
-    HardwareInfo,
-    detect_hardware,
-    recommend_engine,
-    recommend_model,
-)
+
+if TYPE_CHECKING:
+    from openjarvis.core.config import HardwareInfo
 
 # Marker used to redact secret values in __repr__.
 _REDACTED_PLACEHOLDER = "***redacted***"
@@ -113,6 +109,8 @@ def write_initial_config(
     Called by both ``install.sh`` (via ``jarvis _bootstrap --write-config``)
     and ``jarvis init`` so the TOML format has one definition.
     """
+    from openjarvis.core import config as _cfg
+
     _cfg.DEFAULT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     gpu_comment = ""
@@ -169,6 +167,8 @@ def write_initial_config(
 
 def _seed_memory_files() -> None:
     """Create SOUL.md / MEMORY.md / USER.md / skills/ if absent."""
+    from openjarvis.core import config as _cfg
+
     home = _cfg.DEFAULT_CONFIG_DIR
     if not (home / "SOUL.md").exists():
         (home / "SOUL.md").write_text(_DEFAULT_SOUL)
@@ -226,6 +226,13 @@ def bootstrap_cmd(
     """Internal helper used by install.sh — not for direct user invocation."""
     if not write_config:
         raise click.UsageError("--write-config is required")
+
+    from openjarvis.core import config as _cfg
+    from openjarvis.core.config import (
+        detect_hardware,
+        recommend_engine,
+        recommend_model,
+    )
 
     hw = detect_hardware()
     chosen_engine = engine or recommend_engine(hw)

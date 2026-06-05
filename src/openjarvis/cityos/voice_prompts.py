@@ -33,8 +33,7 @@ def load_voice_prompt(persona: str, tenant: TenantContext | None = None) -> str:
         base = prompt_file.read_text(encoding="utf-8")
     else:
         base = (
-            "You are Dakkah, the CityOS voice assistant. "
-            "Help users with city services."
+            "You are Dakkah, the CityOS voice assistant. Help users with city services."
         )
 
     voice_constraints = (

@@ -59,7 +59,9 @@ class CityOSEventBridge:
         except Exception as e:
             logger.warning("Redis publish failed: %s", e)
 
-    async def _publish_kuzzle(self, index: str, collection: str, document: dict[str, Any]) -> None:
+    async def _publish_kuzzle(
+        self, index: str, collection: str, document: dict[str, Any]
+    ) -> None:
         if not self._kuzzle_url:
             return
         try:
@@ -109,7 +111,9 @@ class CityOSEventBridge:
 
         # Publish to Redis (cityos-events channel)
         await self._publish_redis("cityos:events", envelope)
-        await self._publish_redis(f"cityos:events:{tenant.tenant_id if tenant else 'default'}", envelope)
+        await self._publish_redis(
+            f"cityos:events:{tenant.tenant_id if tenant else 'default'}", envelope
+        )
 
         # Publish to Kuzzle (realtime for mobile)
         await self._publish_kuzzle(

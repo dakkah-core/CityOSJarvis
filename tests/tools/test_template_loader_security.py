@@ -8,6 +8,8 @@ templates must not allow command injection through parameter substitution.
 from __future__ import annotations
 
 import os
+import shlex
+import sys
 
 import pytest
 
@@ -29,6 +31,12 @@ ESCAPE_EXPRESSIONS = [
     "globals()",
     "().__class__",
 ]
+
+
+def _echo_command() -> str:
+    executable = sys.executable.replace(os.sep, "/")
+    script = "import sys; print(sys.argv[1])"
+    return f"{shlex.quote(executable)} -c {shlex.quote(script)} {{msg}}"
 
 
 @pytest.mark.parametrize("expr", ESCAPE_EXPRESSIONS)
@@ -74,7 +82,7 @@ def test_shell_action_neutralizes_injection(tmp_path) -> None:
     tmpl = ToolTemplate(
         {
             "name": "echoer",
-            "action": {"type": "shell", "command": "echo {msg}"},
+            "action": {"type": "shell", "command": _echo_command()},
         }
     )
     result = tmpl.execute(msg=f"hello; touch {marker}")
@@ -88,7 +96,7 @@ def test_shell_action_passes_values_as_single_argument() -> None:
     tmpl = ToolTemplate(
         {
             "name": "echoer",
-            "action": {"type": "shell", "command": "echo {msg}"},
+            "action": {"type": "shell", "command": _echo_command()},
         }
     )
     result = tmpl.execute(msg="a b c")
@@ -111,7 +119,7 @@ def test_shell_action_command_substitution_is_inert(tmp_path) -> None:
     tmpl = ToolTemplate(
         {
             "name": "echoer",
-            "action": {"type": "shell", "command": "echo {msg}"},
+            "action": {"type": "shell", "command": _echo_command()},
         }
     )
     tmpl.execute(msg=f"$(touch {marker})")

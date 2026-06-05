@@ -1,13 +1,12 @@
 """Tests for Arabic voice command parser."""
 
-import pytest
 from .voice_arabic import (
-    normalize_arabic,
-    extract_numbers,
-    detect_dialect,
-    parse_arabic_intent,
-    arabic_text_to_ssml,
     _is_arabic_text,
+    arabic_text_to_ssml,
+    detect_dialect,
+    extract_numbers,
+    normalize_arabic,
+    parse_arabic_intent,
 )
 
 
@@ -15,7 +14,7 @@ class TestNormalizeArabic:
     def test_removes_tashkeel(self):
         text = "حَالَةُ التَّصْرِيحِ"
         result = normalize_arabic(text)
-        assert "\u064B" not in result  # No fatha
+        assert "\u064b" not in result  # No fatha
         assert "حاله التصريح" in result  # ta marbuta normalized to ه
 
     def test_normalizes_alef_variants(self):

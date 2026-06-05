@@ -4,7 +4,8 @@ Runs latency, throughput, and memory benchmarks against
 a local or remote CityOSJarvis instance.
 
 Usage:
-    uv run python tests/performance/benchmark_runner.py --url http://localhost:8000 --duration 60
+    uv run python tests/performance/benchmark_runner.py \
+        --url http://localhost:8000 --duration 60
 """
 
 from __future__ import annotations
@@ -13,9 +14,8 @@ import argparse
 import asyncio
 import json
 import statistics
-import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -88,7 +88,9 @@ class CityOSJarvisBenchmark:
         if api_key:
             self.headers["Authorization"] = f"Bearer {api_key}"
 
-    async def _post(self, path: str, payload: dict[str, Any], timeout: float = 30.0) -> tuple[float, bool]:
+    async def _post(
+        self, path: str, payload: dict[str, Any], timeout: float = 30.0
+    ) -> tuple[float, bool]:
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient() as client:
@@ -105,7 +107,9 @@ class CityOSJarvisBenchmark:
         except Exception:
             return (time.perf_counter() - start) * 1000, False
 
-    async def benchmark_chat(self, samples: int = 50, message: str = "Hello") -> BenchmarkResult:
+    async def benchmark_chat(
+        self, samples: int = 50, message: str = "Hello"
+    ) -> BenchmarkResult:
         result = BenchmarkResult(name="chat_latency", samples=samples)
         for _ in range(samples):
             latency, ok = await self._post(
@@ -118,7 +122,9 @@ class CityOSJarvisBenchmark:
                 result.errors += 1
         return result
 
-    async def benchmark_streaming(self, samples: int = 20, message: str = "Tell me a story") -> BenchmarkResult:
+    async def benchmark_streaming(
+        self, samples: int = 20, message: str = "Tell me a story"
+    ) -> BenchmarkResult:
         result = BenchmarkResult(name="streaming_latency", samples=samples)
         for _ in range(samples):
             start = time.perf_counter()
@@ -150,7 +156,11 @@ class CityOSJarvisBenchmark:
         for _ in range(samples):
             latency, ok = await self._post(
                 "/v1/voice/speak",
-                {"text": "Welcome to Dakkah CityOS", "voiceId": "default", "language": "en"},
+                {
+                    "text": "Welcome to Dakkah CityOS",
+                    "voiceId": "default",
+                    "language": "en",
+                },
                 timeout=15.0,
             )
             if ok:
@@ -187,7 +197,9 @@ async def main() -> None:
     parser.add_argument("--url", default="http://localhost:8000", help="Base URL")
     parser.add_argument("--api-key", default=None, help="API key")
     parser.add_argument("--duration", type=int, default=60, help="Duration in seconds")
-    parser.add_argument("--output", default="benchmark-results.json", help="Output file")
+    parser.add_argument(
+        "--output", default="benchmark-results.json", help="Output file"
+    )
     args = parser.parse_args()
 
     benchmark = CityOSJarvisBenchmark(args.url, args.api_key)
@@ -209,7 +221,11 @@ async def main() -> None:
 
     # Concurrent sessions
     print("[4/4] Concurrent sessions benchmark...")
-    results.append(await benchmark.benchmark_concurrent_sessions(concurrency=10, messages_per_session=5))
+    results.append(
+        await benchmark.benchmark_concurrent_sessions(
+            concurrency=10, messages_per_session=5
+        )
+    )
 
     # Output
     report = {
@@ -224,7 +240,10 @@ async def main() -> None:
     print(f"\nResults written to {args.output}")
     for r in results:
         print(f"\n{r.name}:")
-        print(f"  Samples: {len(r.latencies_ms)}/{r.samples} (errors: {r.errors}, timeouts: {r.timeouts})")
+        print(
+            f"  Samples: {len(r.latencies_ms)}/{r.samples} "
+            f"(errors: {r.errors}, timeouts: {r.timeouts})"
+        )
         print(f"  Latency: p50={r.p50:.1f}ms, p95={r.p95:.1f}ms, p99={r.p99:.1f}ms")
         print(f"  Throughput: {r.throughput_rps:.2f} req/s")
 

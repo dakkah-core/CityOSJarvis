@@ -67,8 +67,27 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool) -> None:
     # parsed the subcommand's args yet at this point).
     import sys
 
-    research_mode_active = "--research" in sys.argv
-    if not quiet and ctx.invoked_subcommand and not research_mode_active:
+    raw_args = set(sys.argv[1:])
+    raw_args.update(ctx.args)
+    research_mode_active = "--research" in raw_args
+    machine_output_active = bool({"--json", "--output-json"} & raw_args)
+    structured_output_commands = {
+        "ask",
+        "bench",
+        "compose",
+        "config",
+        "doctor",
+        "scan",
+        "telemetry",
+    }
+    update_check_command = ctx.invoked_subcommand not in structured_output_commands
+    if (
+        not quiet
+        and ctx.invoked_subcommand
+        and not research_mode_active
+        and not machine_output_active
+        and update_check_command
+    ):
         from openjarvis.cli._version_check import check_for_updates
 
         check_for_updates(ctx.invoked_subcommand)

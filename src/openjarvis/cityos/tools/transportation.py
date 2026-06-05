@@ -24,7 +24,9 @@ class TransportationTool(CityOSTool):
         "required": ["origin", "destination"],
     }
 
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         origin = params.get("origin", "")
         destination = params.get("destination", "")
         # TODO: Integrate with CityOS transportation API

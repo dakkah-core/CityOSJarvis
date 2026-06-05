@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from openjarvis.cityos.metrics import (
+    ACTIVE_CONNECTIONS,
+    CHAT_TOKENS,
+    COMPLIANCE_CHECKS,
     REQUEST_COUNT,
     REQUEST_LATENCY,
-    ACTIVE_CONNECTIONS,
-    COMPLIANCE_CHECKS,
-    CHAT_TOKENS,
     MetricsMiddleware,
 )
 

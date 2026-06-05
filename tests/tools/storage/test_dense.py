@@ -14,8 +14,8 @@ skipped if the server is unreachable.
 from __future__ import annotations
 
 import os
-import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -29,13 +29,31 @@ from openjarvis.tools.storage.dense import (
 _FIXTURE_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "docs"
 _OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "localhost")
 _OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", "11434"))
+_OLLAMA_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+
+
+def _ollama_base_url() -> str:
+    if _OLLAMA_HOST.startswith(("http://", "https://")):
+        parsed = urlparse(_OLLAMA_HOST)
+        if parsed.port is not None:
+            return _OLLAMA_HOST.rstrip("/")
+        return f"{_OLLAMA_HOST.rstrip('/')}:{_OLLAMA_PORT}"
+    return f"http://{_OLLAMA_HOST}:{_OLLAMA_PORT}"
 
 
 def _ollama_up() -> bool:
     try:
-        with socket.create_connection((_OLLAMA_HOST, _OLLAMA_PORT), timeout=1.0):
-            return True
-    except OSError:
+        import httpx
+
+        resp = httpx.post(
+            f"{_ollama_base_url()}/api/embed",
+            json={"model": _OLLAMA_MODEL, "input": ["probe"]},
+            timeout=2.0,
+        )
+        if resp.status_code != 200:
+            return False
+        return bool(resp.json().get("embeddings"))
+    except Exception:
         return False
 
 
@@ -60,8 +78,7 @@ class TestChunkMarkdown:
 
     def test_single_section_without_splits(self):
         md = (
-            "# Title\n\n"
-            "Some body paragraph with a few sentences. Enough to be a chunk."
+            "# Title\n\nSome body paragraph with a few sentences. Enough to be a chunk."
         )
         chunks = chunk_markdown(md, source="t.md")
         assert len(chunks) == 1
@@ -203,8 +220,7 @@ class TestDedupeChunks:
         chunks = [_mk(a, "a.md"), _mk(b, "b.md"), _mk(c, "c.md")]
         survivors, report = dedupe_chunks(chunks)
         assert len(survivors) == 1, (
-            f"got {len(survivors)} survivors — "
-            "expected single cluster from boilerplate"
+            f"got {len(survivors)} survivors — expected single cluster from boilerplate"
         )
         assert report.removed_count == 2
 
@@ -340,7 +356,8 @@ def test_paraphrase_matches_semantically(indexed_backend):
     facts we need (CPU-only, llama.cpp).
     """
     results = indexed_backend.retrieve(
-        "can I run this on a laptop without a gpu?", top_k=3,
+        "can I run this on a laptop without a gpu?",
+        top_k=3,
     )
     assert results, "expected at least one hit"
     # Top-3 should all be from the topical docs (engines.md or hardware.md)
@@ -356,7 +373,8 @@ def test_paraphrase_matches_semantically(indexed_backend):
 def test_engine_query_finds_engines_doc(indexed_backend):
     """Semantic query about inference engines should find engines.md."""
     results = indexed_backend.retrieve(
-        "which backend is best for high throughput serving?", top_k=3,
+        "which backend is best for high throughput serving?",
+        top_k=3,
     )
     assert results
     assert results[0].source == "engines.md"

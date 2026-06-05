@@ -10,16 +10,14 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import click
 from rich.console import Console
 from rich.table import Table
 
-from openjarvis.connectors.pipeline import IngestionPipeline
-from openjarvis.connectors.store import KnowledgeStore
-from openjarvis.connectors.sync_engine import SyncEngine
-from openjarvis.core.config import DEFAULT_CONFIG_DIR
+if TYPE_CHECKING:
+    from openjarvis.connectors.store import KnowledgeStore
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -130,6 +128,8 @@ def detect_token_sources(
     connectors_dir: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     """Return token-based sources that already have valid credentials."""
+    from openjarvis.core.config import DEFAULT_CONFIG_DIR
+
     cdir = connectors_dir or (DEFAULT_CONFIG_DIR / "connectors")
     sources: List[Dict[str, Any]] = []
 
@@ -156,6 +156,8 @@ def detect_token_sources(
 
 def _prompt_connect_sources(console: Console) -> List[Dict[str, Any]]:
     """Interactively prompt the user to connect token-based sources."""
+    from openjarvis.core.config import DEFAULT_CONFIG_DIR
+
     connected: List[Dict[str, Any]] = []
     cdir = DEFAULT_CONFIG_DIR / "connectors"
     cdir.mkdir(parents=True, exist_ok=True)
@@ -260,6 +262,9 @@ def ingest_sources(
 
     Returns total chunks indexed across all sources.
     """
+    from openjarvis.connectors.pipeline import IngestionPipeline
+    from openjarvis.connectors.sync_engine import SyncEngine
+
     pipeline = IngestionPipeline(store)
     engine = SyncEngine(pipeline, state_db=state_db)
     total = 0
@@ -368,6 +373,11 @@ def _launch_chat(store: KnowledgeStore, console: Console) -> None:
 @click.option("--skip-chat", is_flag=True, help="Ingest only, don't launch chat.")
 def deep_research_setup(obsidian_vault: Optional[str], skip_chat: bool) -> None:
     """Auto-detect local data sources, ingest, and launch Deep Research chat."""
+    from openjarvis.connectors.pipeline import IngestionPipeline
+    from openjarvis.connectors.store import KnowledgeStore
+    from openjarvis.connectors.sync_engine import SyncEngine
+    from openjarvis.core.config import DEFAULT_CONFIG_DIR
+
     console = Console()
     console.print("\n[bold]Deep Research Setup[/bold]\n")
 

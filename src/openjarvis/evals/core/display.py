@@ -399,6 +399,10 @@ def print_completion(
     bench_energy: Optional[Dict[str, float]] = None,
 ) -> None:
     """Print a completion panel showing where data was saved."""
+
+    def display_path(path: Path) -> str:
+        return path.as_posix()
+
     lines = [
         "[bold green]Evaluation complete[/bold green]",
         (
@@ -420,16 +424,16 @@ def print_completion(
         if be_power is not None:
             lines.append(f"  [cyan]Bench Power:[/cyan]  {be_power:.1f} W")
     if output_path:
-        lines.append(f"  [cyan]JSONL:[/cyan]   {output_path}")
+        lines.append(f"  [cyan]JSONL:[/cyan]   {display_path(output_path)}")
         summary_path = (
             output_path.with_suffix(".summary.json")
             if hasattr(output_path, "with_suffix")
             else None
         )
         if summary_path:
-            lines.append(f"  [cyan]Summary:[/cyan] {summary_path}")
+            lines.append(f"  [cyan]Summary:[/cyan] {display_path(summary_path)}")
     if traces_dir:
-        lines.append(f"  [cyan]Traces:[/cyan]  {traces_dir}")
+        lines.append(f"  [cyan]Traces:[/cyan]  {display_path(traces_dir)}")
     body = "\n".join(lines)
     panel = Panel(body, border_style="green", expand=False)
     console.print(panel)

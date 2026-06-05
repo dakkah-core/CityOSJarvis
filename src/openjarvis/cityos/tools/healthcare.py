@@ -9,12 +9,18 @@ from .base import CityOSTool
 
 class HealthcareTool(CityOSTool):
     name = "healthcare_facility_directory"
-    description = "Find healthcare facilities (hospitals, clinics, pharmacies) by location or specialty. Does NOT provide patient data."
+    description = (
+        "Find healthcare facilities (hospitals, clinics, pharmacies) by "
+        "location or specialty. Does NOT provide patient data."
+    )
     parameters = {
         "type": "object",
         "properties": {
             "location": {"type": "string", "description": "City or district name"},
-            "specialty": {"type": "string", "description": "Medical specialty (e.g., cardiology, pediatrics)"},
+            "specialty": {
+                "type": "string",
+                "description": "Medical specialty (e.g., cardiology, pediatrics)",
+            },
             "facility_type": {
                 "type": "string",
                 "enum": ["hospital", "clinic", "pharmacy", "laboratory"],
@@ -24,7 +30,9 @@ class HealthcareTool(CityOSTool):
         "required": ["location"],
     }
 
-    def run(self, params: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self, params: dict[str, Any], tenant_id: str | None = None
+    ) -> dict[str, Any]:
         location = params.get("location", "")
         # TODO: Integrate with CityOS healthcare domain API
         return {
@@ -39,5 +47,7 @@ class HealthcareTool(CityOSTool):
                     "hours": "24/7",
                 }
             ],
-            "disclaimer": "This is directory information only. For medical emergencies, call 997.",
+            "disclaimer": (
+                "This is directory information only. For medical emergencies, call 997."
+            ),
         }

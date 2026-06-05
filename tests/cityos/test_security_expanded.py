@@ -100,7 +100,10 @@ Phone: +966 50 123 4567"""
         assert not result.allowed
 
     def test_phi_in_context(self, gate: ComplianceGate) -> None:
-        result = gate.classify("Please transfer 1000 SAR to IBAN SA0380000000608010167519 for medical treatment")
+        result = gate.classify(
+            "Please transfer 1000 SAR to IBAN "
+            "SA0380000000608010167519 for medical treatment"
+        )
         assert not result.allowed
 
 

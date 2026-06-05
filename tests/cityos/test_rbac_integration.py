@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from openjarvis.cityos.tenant import TenantContext, validate_cross_tenant_access
 
 

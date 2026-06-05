@@ -6,8 +6,6 @@ security patterns and input validation expectations.
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestSecurityHeaders:
     def test_expected_security_headers(self) -> None:

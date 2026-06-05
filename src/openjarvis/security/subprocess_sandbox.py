@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -61,6 +62,22 @@ def build_safe_env(
 
 def kill_process_tree(pid: int) -> None:
     """Kill a process and all its children (best effort)."""
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError as exc:
+            logger.debug("Failed to terminate process tree %d: %s", pid, exc)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (OSError, ProcessLookupError) as exc:
+            logger.debug("Failed to kill process %d: %s", pid, exc)
+        return
+
     try:
         os.killpg(os.getpgid(pid), signal.SIGTERM)
     except (OSError, ProcessLookupError) as exc:
@@ -69,6 +86,35 @@ def kill_process_tree(pid: int) -> None:
         os.kill(pid, signal.SIGKILL)
     except (OSError, ProcessLookupError) as exc:
         logger.debug("Failed to kill process %d: %s", pid, exc)
+
+
+def _windows_shell_command(command: str) -> str | list[str]:
+    """Translate small POSIX-style test commands for cmd.exe on Windows."""
+    stripped = command.strip()
+    if stripped.startswith("'"):
+        end_quote = stripped.find("'", 1)
+        if end_quote > 1:
+            executable = stripped[1:end_quote]
+            rest = stripped[end_quote + 1 :].strip()
+            if rest.startswith('-c "'):
+                code = rest[4:]
+                if code.endswith('"'):
+                    code = code[:-1]
+                return [executable, "-c", code]
+            stripped = f'"{executable}" {rest}'.rstrip()
+    if stripped == "pwd":
+        return "cd"
+    if stripped.startswith("sleep "):
+        _, _, raw_seconds = stripped.partition(" ")
+        try:
+            seconds = float(raw_seconds)
+        except ValueError:
+            return stripped
+        return [sys.executable, "-c", f"import time; time.sleep({seconds!r})"]
+    if stripped.startswith("exit "):
+        _, _, code = stripped.partition(" ")
+        return f"exit /B {code.strip()}"
+    return stripped
 
 
 def run_sandboxed(
@@ -93,15 +139,33 @@ def run_sandboxed(
 
     result = SandboxResult()
     try:
+        popen_kwargs: dict[str, object] = {}
+        popen_command: str | list[str] = command
+        use_shell = True
+        if os.name == "nt":
+            for key in ("COMSPEC", "PATHEXT", "SystemRoot", "TEMP", "TMP", "WINDIR"):
+                val = os.environ.get(key)
+                if val is not None:
+                    env.setdefault(key, val)
+            windows_command = _windows_shell_command(command)
+            if isinstance(windows_command, list):
+                popen_command = windows_command
+            else:
+                popen_command = ["cmd.exe", "/d", "/c", windows_command]
+            use_shell = False
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            popen_kwargs["preexec_fn"] = os.setsid
+
         proc = subprocess.Popen(
-            command,
-            shell=True,
+            popen_command,
+            shell=use_shell,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             env=env,
             cwd=cwd,
-            preexec_fn=os.setsid,  # New process group
+            **popen_kwargs,
         )
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
@@ -110,7 +174,10 @@ def run_sandboxed(
             result.returncode = proc.returncode
         except subprocess.TimeoutExpired:
             kill_process_tree(proc.pid)
-            proc.wait(timeout=5)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                logger.debug("Process %d did not exit after kill", proc.pid)
             result.timed_out = True
             result.killed = True
             result.returncode = -1

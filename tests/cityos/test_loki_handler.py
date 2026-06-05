@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -72,6 +71,7 @@ class TestLokiHandler:
     @patch("openjarvis.cityos.loki_handler.urlopen")
     def test_send_failure(self, mock_urlopen, handler: LokiHandler) -> None:
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
 
         event = {"tenant_id": "t1", "event": "chat.completed"}

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -38,11 +40,22 @@ class SQLiteMemory(MemoryBackend):
 
         self._db_path = str(db_path)
 
-        from openjarvis._rust_bridge import get_rust_module
+        try:
+            from openjarvis._rust_bridge import get_rust_module
 
-        _rust = get_rust_module()
-        self._rust_impl = _rust.SQLiteMemory(self._db_path)
-        self._conn = None  # type: ignore[assignment]
+            _rust = get_rust_module()
+            self._rust_impl = _rust.SQLiteMemory(self._db_path)
+            self._conn = None
+        except ImportError:
+            self._rust_impl = None
+            if self._db_path != ":memory:":
+                Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+            if not _check_fts5(self._conn):
+                raise RuntimeError("SQLite FTS5 extension is not available")
+            self._create_tables()
+            self._conn.commit()
 
     def _create_tables(self) -> None:
         self._conn.executescript("""
@@ -71,7 +84,26 @@ class SQLiteMemory(MemoryBackend):
     ) -> str:
         """Persist *content* and return a unique document id."""
         meta_json = json.dumps(metadata) if metadata else None
-        doc_id = self._rust_impl.store(content, source, meta_json)
+        if self._rust_impl is not None:
+            doc_id = self._rust_impl.store(content, source, meta_json)
+        else:
+            assert self._conn is not None
+            doc_id = str(uuid.uuid4())
+            cursor = self._conn.execute(
+                """
+                INSERT INTO documents (id, content, source, metadata, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (doc_id, content, source, meta_json or "{}", time.time()),
+            )
+            self._conn.execute(
+                """
+                INSERT INTO documents_fts(rowid, content, source)
+                VALUES (?, ?, ?)
+                """,
+                (cursor.lastrowid, content, source),
+            )
+            self._conn.commit()
         bus = get_event_bus()
         bus.publish(
             EventType.MEMORY_STORE,
@@ -94,11 +126,47 @@ class SQLiteMemory(MemoryBackend):
         if not query.strip():
             return []
 
-        from openjarvis._rust_bridge import retrieval_results_from_json
+        if self._rust_impl is not None:
+            from openjarvis._rust_bridge import retrieval_results_from_json
 
-        results = retrieval_results_from_json(
-            self._rust_impl.retrieve(query, top_k),
-        )
+            results = retrieval_results_from_json(
+                self._rust_impl.retrieve(query, top_k),
+            )
+        else:
+            assert self._conn is not None
+            try:
+                rows = self._conn.execute(
+                    """
+                    SELECT
+                        d.content,
+                        d.source,
+                        d.metadata,
+                        bm25(documents_fts) AS rank
+                    FROM documents_fts
+                    JOIN documents d ON d.rowid = documents_fts.rowid
+                    WHERE documents_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                    """,
+                    (query, top_k),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = []
+
+            results = []
+            for row in rows:
+                try:
+                    metadata = json.loads(row["metadata"] or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    metadata = {}
+                results.append(
+                    RetrievalResult(
+                        content=row["content"],
+                        score=float(-row["rank"]),
+                        source=row["source"],
+                        metadata=metadata,
+                    )
+                )
         bus = get_event_bus()
         bus.publish(
             EventType.MEMORY_RETRIEVE,
@@ -112,19 +180,43 @@ class SQLiteMemory(MemoryBackend):
 
     def delete(self, doc_id: str) -> bool:
         """Delete a document by id — always via Rust backend."""
-        return self._rust_impl.delete(doc_id)
+        if self._rust_impl is not None:
+            return self._rust_impl.delete(doc_id)
+        assert self._conn is not None
+        row = self._conn.execute(
+            "SELECT rowid FROM documents WHERE id = ?",
+            (doc_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        self._conn.execute("DELETE FROM documents_fts WHERE rowid = ?", (row["rowid"],))
+        self._conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        self._conn.commit()
+        return True
 
     def clear(self) -> None:
         """Remove all stored documents — always via Rust backend."""
-        self._rust_impl.clear()
+        if self._rust_impl is not None:
+            self._rust_impl.clear()
+            return
+        assert self._conn is not None
+        self._conn.execute("DELETE FROM documents_fts")
+        self._conn.execute("DELETE FROM documents")
+        self._conn.commit()
 
     def count(self) -> int:
         """Return the number of stored documents — always via Rust backend."""
-        return self._rust_impl.count()
+        if self._rust_impl is not None:
+            return self._rust_impl.count()
+        assert self._conn is not None
+        row = self._conn.execute("SELECT COUNT(*) FROM documents").fetchone()
+        return int(row[0]) if row else 0
 
     def close(self) -> None:
         """Close the database connection."""
-        pass
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
 
 
 __all__ = ["SQLiteMemory"]

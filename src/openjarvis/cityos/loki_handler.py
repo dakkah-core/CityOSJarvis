@@ -11,8 +11,8 @@ import logging
 import os
 import time
 from typing import Any
-from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,9 @@ class LokiHandler:
     """Forwards audit logs to Grafana Loki."""
 
     def __init__(self, loki_url: str | None = None) -> None:
-        self.loki_url = (loki_url or os.environ.get("LOKI_URL", "http://localhost:3100")).rstrip("/")
+        self.loki_url = (
+            loki_url or os.environ.get("LOKI_URL", "http://localhost:3100")
+        ).rstrip("/")
         self.push_url = f"{self.loki_url}/loki/api/v1/push"
         self.enabled = os.environ.get("ENABLE_LOKI", "true").lower() == "true"
         if not self.enabled:
@@ -44,7 +46,9 @@ class LokiHandler:
                         "job": "cityosjarvis-audit",
                         "tenant_id": str(tenant_id),
                         "event_type": str(event_type),
-                        "correlation_id": str(correlation_id) if correlation_id else "none",
+                        "correlation_id": str(correlation_id)
+                        if correlation_id
+                        else "none",
                     },
                     "values": [[ts_ns, line]],
                 }

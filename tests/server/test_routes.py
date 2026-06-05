@@ -341,9 +341,7 @@ class TestChatCompletions:
             if line.startswith("data:") and "[DONE]" not in line:
                 data = json.loads(line[5:].strip())
                 delta_content = (
-                    data.get("choices", [{}])[0]
-                    .get("delta", {})
-                    .get("content")
+                    data.get("choices", [{}])[0].get("delta", {}).get("content")
                 )
                 if delta_content:
                     content += delta_content

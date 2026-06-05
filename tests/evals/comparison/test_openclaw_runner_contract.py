@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,7 +39,22 @@ def test_openclaw_runner_parses_real_agent_json_shape(tmp_path: Path) -> None:
     env = {
         "OPENCLAW_PATH": str(tmp_path),
         "HOME": str(tmp_path / "home"),
+        "PATH": os.environ.get("PATH", ""),
     }
+    if os.name == "nt":
+        for key in (
+            "APPDATA",
+            "COMSPEC",
+            "LOCALAPPDATA",
+            "PATHEXT",
+            "SystemRoot",
+            "TEMP",
+            "TMP",
+            "USERPROFILE",
+            "WINDIR",
+        ):
+            if key in os.environ:
+                env[key] = os.environ[key]
     result = subprocess.run(
         [
             node,

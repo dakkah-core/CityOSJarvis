@@ -17,6 +17,8 @@ from starlette.testclient import TestClient  # noqa: E402
 
 from openjarvis.core.registry import ChannelRegistry  # noqa: E402
 
+_TEST_SENDBLUE_SECRET = "test-webhook-secret"
+
 
 @pytest.fixture(autouse=True)
 def _register_sendblue():
@@ -41,6 +43,7 @@ def sendblue_channel():
         api_key_id="test_key",
         api_secret_key="test_secret",
         from_number="+15551234567",
+        webhook_secret=_TEST_SENDBLUE_SECRET,
     )
     ch.connect()
     return ch
@@ -82,6 +85,7 @@ class TestSendBlueWebhook:
                 "status": "RECEIVED",
                 "service": "iMessage",
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 200
 
@@ -93,6 +97,7 @@ class TestSendBlueWebhook:
                 "content": "Sent message",
                 "is_outbound": True,
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 200
         mock_bridge.handle_incoming.assert_not_called()
@@ -105,6 +110,7 @@ class TestSendBlueWebhook:
                 "content": "",
                 "is_outbound": False,
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 200
         mock_bridge.handle_incoming.assert_not_called()
@@ -116,6 +122,7 @@ class TestSendBlueWebhook:
                 "content": "Hello",
                 "is_outbound": False,
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 200
         mock_bridge.handle_incoming.assert_not_called()
@@ -146,6 +153,7 @@ class TestSendBlueWebhook:
                 "content": "Hello",
                 "is_outbound": False,
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 403
 
@@ -178,6 +186,7 @@ class TestSendBlueWebhook:
                 "content": "Hello",
                 "is_outbound": False,
             },
+            headers={"x-sendblue-secret": _TEST_SENDBLUE_SECRET},
         )
         assert resp.status_code == 200
 

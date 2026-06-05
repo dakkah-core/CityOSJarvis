@@ -26,12 +26,26 @@ class TestReplayHistoryToolCalls:
 
     def test_assistant_tool_calls_are_replayed_with_results(self):
         history = [  # DESC order (newest first), as list_messages returns
-            {"id": "m2", "direction": "agent_to_user", "content": "", "tool_calls": [
-                {"tool": "shell_exec", "arguments": '{"command":"pwd"}',
-                 "result": "/home/u", "success": True, "latency": 1.0},
-            ]},
-            {"id": "m1", "direction": "user_to_agent", "content": "run pwd",
-             "tool_calls": None},
+            {
+                "id": "m2",
+                "direction": "agent_to_user",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "tool": "shell_exec",
+                        "arguments": '{"command":"pwd"}',
+                        "result": "/home/u",
+                        "success": True,
+                        "latency": 1.0,
+                    },
+                ],
+            },
+            {
+                "id": "m1",
+                "direction": "user_to_agent",
+                "content": "run pwd",
+                "tool_calls": None,
+            },
         ]
         msgs = _replay_history_messages(history, exclude_id="current")
         # Chronological: user, assistant(tool_calls), tool(result)
@@ -46,8 +60,12 @@ class TestReplayHistoryToolCalls:
 
     def test_plain_assistant_without_tool_calls(self):
         history = [
-            {"id": "m1", "direction": "agent_to_user", "content": "hi",
-             "tool_calls": None},
+            {
+                "id": "m1",
+                "direction": "agent_to_user",
+                "content": "hi",
+                "tool_calls": None,
+            },
         ]
         msgs = _replay_history_messages(history, exclude_id="current")
         assert len(msgs) == 1
@@ -56,10 +74,18 @@ class TestReplayHistoryToolCalls:
 
     def test_excludes_current_message(self):
         history = [
-            {"id": "cur", "direction": "user_to_agent", "content": "now",
-             "tool_calls": None},
-            {"id": "old", "direction": "user_to_agent", "content": "before",
-             "tool_calls": None},
+            {
+                "id": "cur",
+                "direction": "user_to_agent",
+                "content": "now",
+                "tool_calls": None,
+            },
+            {
+                "id": "old",
+                "direction": "user_to_agent",
+                "content": "before",
+                "tool_calls": None,
+            },
         ]
         msgs = _replay_history_messages(history, exclude_id="cur")
         assert [m.content for m in msgs] == ["before"]
@@ -69,13 +95,24 @@ class TestSamplerKwargs:
     """#386 — sampler params forwarded only when set."""
 
     def test_reads_present_keys(self):
-        cfg = {"temperature": 0.7, "repetition_penalty": 1.1, "top_p": 0.9,
-               "top_k": 40, "min_p": 0.05, "frequency_penalty": 0.2,
-               "presence_penalty": 0.1}
+        cfg = {
+            "temperature": 0.7,
+            "repetition_penalty": 1.1,
+            "top_p": 0.9,
+            "top_k": 40,
+            "min_p": 0.05,
+            "frequency_penalty": 0.2,
+            "presence_penalty": 0.1,
+        }
         out = _sampler_kwargs(cfg)
-        assert out == {"repetition_penalty": 1.1, "top_p": 0.9, "top_k": 40,
-                       "min_p": 0.05, "frequency_penalty": 0.2,
-                       "presence_penalty": 0.1}
+        assert out == {
+            "repetition_penalty": 1.1,
+            "top_p": 0.9,
+            "top_k": 40,
+            "min_p": 0.05,
+            "frequency_penalty": 0.2,
+            "presence_penalty": 0.1,
+        }
         # temperature/max_tokens are handled separately, not here.
         assert "temperature" not in out
 
@@ -98,34 +135,39 @@ class TestInstantiateManagedTool:
 
     def test_memory_tool_gets_backend(self):
         backend = object()
-        app_state = SimpleNamespace(memory_backend=backend, config=None,
-                                    channel_bridge=None)
-        tool = _instantiate_managed_tool(_FakeTool, "memory_store",
-                                         engine=object(), model="m",
-                                         app_state=app_state)
+        app_state = SimpleNamespace(
+            memory_backend=backend, config=None, channel_bridge=None
+        )
+        tool = _instantiate_managed_tool(
+            _FakeTool, "memory_store", engine=object(), model="m", app_state=app_state
+        )
         assert tool.kwargs == {"backend": backend}
 
     def test_llm_tool_gets_engine_and_model(self):
         engine = object()
-        app_state = SimpleNamespace(memory_backend=None, config=None,
-                                    channel_bridge=None)
-        tool = _instantiate_managed_tool(_FakeTool, "llm", engine=engine,
-                                         model="qwen", app_state=app_state)
+        app_state = SimpleNamespace(
+            memory_backend=None, config=None, channel_bridge=None
+        )
+        tool = _instantiate_managed_tool(
+            _FakeTool, "llm", engine=engine, model="qwen", app_state=app_state
+        )
         assert tool.kwargs == {"engine": engine, "model": "qwen"}
 
     def test_channel_tool_gets_channel(self):
         bridge = object()
-        app_state = SimpleNamespace(memory_backend=None, config=None,
-                                    channel_bridge=bridge)
-        tool = _instantiate_managed_tool(_FakeTool, "channel_send",
-                                         engine=object(), model="m",
-                                         app_state=app_state)
+        app_state = SimpleNamespace(
+            memory_backend=None, config=None, channel_bridge=bridge
+        )
+        tool = _instantiate_managed_tool(
+            _FakeTool, "channel_send", engine=object(), model="m", app_state=app_state
+        )
         assert tool.kwargs == {"channel": bridge}
 
     def test_plain_tool_gets_no_injection(self):
-        app_state = SimpleNamespace(memory_backend=None, config=None,
-                                    channel_bridge=None)
-        tool = _instantiate_managed_tool(_FakeTool, "calculator",
-                                         engine=object(), model="m",
-                                         app_state=app_state)
+        app_state = SimpleNamespace(
+            memory_backend=None, config=None, channel_bridge=None
+        )
+        tool = _instantiate_managed_tool(
+            _FakeTool, "calculator", engine=object(), model="m", app_state=app_state
+        )
         assert tool.kwargs == {}

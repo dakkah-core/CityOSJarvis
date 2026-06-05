@@ -14,9 +14,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from openjarvis.cityos import metrics as jarvis_metrics
 from openjarvis.core.events import EventBus, EventType
 from openjarvis.core.types import ToolCall, ToolResult
-from openjarvis.cityos import metrics as jarvis_metrics
 
 # ---------------------------------------------------------------------------
 # ToolSpec — metadata describing a tool's interface

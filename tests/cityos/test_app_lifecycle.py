@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-import pytest
-
 
 class TestEnvironmentConfiguration:
     def test_openjarvis_api_key_can_be_set(self) -> None:
@@ -15,7 +13,9 @@ class TestEnvironmentConfiguration:
 
     def test_keycloak_url_optional(self) -> None:
         # Keycloak URL may be empty for local dev
-        assert os.environ.get("KEYCLOAK_URL", "") == "" or os.environ.get("KEYCLOAK_URL", "").startswith("http")
+        assert os.environ.get("KEYCLOAK_URL", "") == "" or os.environ.get(
+            "KEYCLOAK_URL", ""
+        ).startswith("http")
 
     def test_cartesia_api_key_optional(self) -> None:
         # TTS is optional
@@ -37,13 +37,16 @@ class TestEnvironmentConfiguration:
 class TestStartupShutdown:
     def test_import_app_factory_without_error(self) -> None:
         from openjarvis.server.app import create_app
+
         assert create_app is not None
 
     def test_app_factory_is_callable(self) -> None:
         from openjarvis.server.app import create_app
+
         assert callable(create_app)
 
     def test_voice_service_router_importable(self) -> None:
         from openjarvis.cityos.voice_service import router
+
         paths = [r.path for r in router.routes]
         assert any("voice" in p for p in paths)

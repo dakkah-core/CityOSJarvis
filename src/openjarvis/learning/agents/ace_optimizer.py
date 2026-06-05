@@ -87,9 +87,7 @@ class _TraceDataProcessor:
         if not predictions:
             return 0.0
         n_correct = sum(
-            1
-            for p, g in zip(predictions, ground_truths)
-            if cls.answer_is_correct(p, g)
+            1 for p, g in zip(predictions, ground_truths) if cls.answer_is_correct(p, g)
         )
         return n_correct / len(predictions)
 
@@ -149,8 +147,7 @@ class ACEAgentOptimizer:
             return {
                 "status": "skipped",
                 "reason": (
-                    f"only {len(traces)} traces, "
-                    f"min_traces={self.config.min_traces}"
+                    f"only {len(traces)} traces, min_traces={self.config.min_traces}"
                 ),
             }
 
@@ -158,8 +155,7 @@ class ACEAgentOptimizer:
             return {
                 "status": "error",
                 "reason": (
-                    "ace not installed (pip install "
-                    "'openjarvis[learning-ace]')"
+                    "ace not installed (pip install 'openjarvis[learning-ace]')"
                 ),
             }
 

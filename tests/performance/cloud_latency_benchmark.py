@@ -156,7 +156,9 @@ async def main() -> None:
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--api-key", default=os.environ.get("OPENJARVIS_API_KEY"))
     parser.add_argument("--iterations", type=int, default=20)
-    parser.add_argument("--prompt", default="Explain the theory of relativity in simple terms.")
+    parser.add_argument(
+        "--prompt", default="Explain the theory of relativity in simple terms."
+    )
     parser.add_argument("--output", default=".build/reports/cloud_latency.json")
     args = parser.parse_args()
 

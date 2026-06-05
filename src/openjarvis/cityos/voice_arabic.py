@@ -98,36 +98,88 @@ _INTENT_PATTERNS = {
 
 # Number words in Arabic (0-100)
 _ARABIC_NUMBERS = {
-    "صفر": 0, "واحد": 1, "واحدة": 1, "اثنان": 2, "اثنين": 2, "ثلاثة": 3,
-    "أربعة": 4, "خمسة": 5, "ستة": 6, "سبعة": 7, "ثمانية": 8, "تسعة": 9,
-    "عشرة": 10, "عشرين": 20, "ثلاثين": 30, "ثلاثون": 30, "أربعين": 40, "أربعون": 40,
-    "خمسين": 50, "خمسون": 50, "ستين": 60, "ستون": 60, "سبعين": 70, "سبعون": 70,
-    "ثمانين": 80, "ثمانون": 80, "تسعين": 90, "تسعون": 90, "مئة": 100,
-    "مائة": 100, "ألف": 1000,
+    "صفر": 0,
+    "واحد": 1,
+    "واحدة": 1,
+    "اثنان": 2,
+    "اثنين": 2,
+    "ثلاثة": 3,
+    "أربعة": 4,
+    "خمسة": 5,
+    "ستة": 6,
+    "سبعة": 7,
+    "ثمانية": 8,
+    "تسعة": 9,
+    "عشرة": 10,
+    "عشرين": 20,
+    "ثلاثين": 30,
+    "ثلاثون": 30,
+    "أربعين": 40,
+    "أربعون": 40,
+    "خمسين": 50,
+    "خمسون": 50,
+    "ستين": 60,
+    "ستون": 60,
+    "سبعين": 70,
+    "سبعون": 70,
+    "ثمانين": 80,
+    "ثمانون": 80,
+    "تسعين": 90,
+    "تسعون": 90,
+    "مئة": 100,
+    "مائة": 100,
+    "ألف": 1000,
     # Eastern Arabic numerals
-    "٠": 0, "١": 1, "٢": 2, "٣": 3, "٤": 4,
-    "٥": 5, "٦": 6, "٧": 7, "٨": 8, "٩": 9,
+    "٠": 0,
+    "١": 1,
+    "٢": 2,
+    "٣": 3,
+    "٤": 4,
+    "٥": 5,
+    "٦": 6,
+    "٧": 7,
+    "٨": 8,
+    "٩": 9,
 }
 
 # Dialect normalization map (keys should match AFTER alef normalization)
 _DIALECT_MAP = {
     # Egyptian dialect
-    "إزاي": "كيف", "عايز": "أريد", "عاوز": "أريد",
-    "مش": "لا", "كده": "هكذا", "بس": "فقط",
-    "يابنى": "يا ابن", "يابنت": "يا بنت",
+    "إزاي": "كيف",
+    "عايز": "أريد",
+    "عاوز": "أريد",
+    "مش": "لا",
+    "كده": "هكذا",
+    "بس": "فقط",
+    "يابنى": "يا ابن",
+    "يابنت": "يا بنت",
     # Gulf dialect
-    "شلون": "كيف", "أبي": "أريد", "ابي": "أريد", "أبغى": "أريد", "ابغى": "أريد",
-    "مو": "لا", "هال": "هذا", "ذاك": "ذلك",
+    "شلون": "كيف",
+    "أبي": "أريد",
+    "ابي": "أريد",
+    "أبغى": "أريد",
+    "ابغى": "أريد",
+    "مو": "لا",
+    "هال": "هذا",
+    "ذاك": "ذلك",
     # Levantine
-    "كيفك": "كيف حالك", "بدي": "أريد", "شو": "ما", "هيدا": "هذا",
+    "كيفك": "كيف حالك",
+    "بدي": "أريد",
+    "شو": "ما",
+    "هيدا": "هذا",
     # Maghrebi
-    "واش": "ما", "بغيت": "أريد", "خاصني": "أحتاج",
+    "واش": "ما",
+    "بغيت": "أريد",
+    "خاصني": "أحتاج",
     "عندي": "لدي",
 }
 
 
 def normalize_arabic(text: str) -> str:
-    """Normalize Arabic text: remove tashkeel, normalize alef variants, apply dialect map."""
+    """Normalize Arabic text.
+
+    Removes tashkeel, normalizes alef variants, and applies the dialect map.
+    """
     # Remove tashkeel (diacritics)
     text = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", text)
 
@@ -141,7 +193,7 @@ def normalize_arabic(text: str) -> str:
     text = text.replace("\u0629", "\u0647")  # ة → ه
 
     # Normalize yaa
-    text = text.replace("\u0649", "\u064A")  # ى → ي
+    text = text.replace("\u0649", "\u064a")  # ى → ي
 
     # Apply dialect normalization
     words = text.split()
@@ -168,10 +220,12 @@ def extract_numbers(text: str) -> list[int]:
         # Check Eastern Arabic numerals
         eastern_match = re.match(r"^[\u0660-\u0669]+$", clean_word)
         if eastern_match:
-            eastern_str = clean_word.translate(str.maketrans(
-                "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
-                "0123456789"
-            ))
+            eastern_str = clean_word.translate(
+                str.maketrans(
+                    "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
+                    "0123456789",
+                )
+            )
             numbers.append(int(eastern_str))
 
         # Check Western numerals
@@ -207,7 +261,7 @@ def detect_dialect(text: str) -> str:
     if words & {"واش", "بغيت", "خاصني", "درت"}:
         scores["ar-MA"] += 3
 
-    best = max(scores, key=scores.get)
+    best = max(scores, key=lambda locale: scores[locale])
     if scores[best] == 0:
         return "ar-SA"  # Default to standard Arabic
     return best
@@ -263,7 +317,9 @@ def parse_arabic_intent(text: str) -> ArabicIntent | None:
 
 def _is_arabic_text(text: str) -> bool:
     """Check if text contains Arabic script."""
-    arabic_range = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]")
+    arabic_range = re.compile(
+        r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]"
+    )
     return bool(arabic_range.search(text))
 
 
@@ -276,10 +332,12 @@ def _extract_permit_id(text: str) -> str | None:
     # Eastern Arabic numerals
     eastern_match = re.search(r"([\u0660-\u0669]{4,})", text)
     if eastern_match:
-        return eastern_match.group(1).translate(str.maketrans(
-            "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
-            "0123456789"
-        ))
+        return eastern_match.group(1).translate(
+            str.maketrans(
+                "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669",
+                "0123456789",
+            )
+        )
     return None
 
 

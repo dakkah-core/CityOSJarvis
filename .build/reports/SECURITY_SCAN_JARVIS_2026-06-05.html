@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>CityOSJarvis Security Scan Report - 2026-06-05</title>
+  </head>
+  <body>
+    <h1>CityOSJarvis Security Scan Report - 2026-06-05</h1>
+    <p><strong>Scope:</strong> tracked Jarvis source/config only; untracked env files, keys, and secret material excluded.</p>
+    <h2>Findings</h2>
+    <ul>
+      <li><strong>High:</strong> managed-agent self-authorization of shell/code tools - fixed by default dangerous-tool rejection and scheduler sanitization.</li>
+      <li><strong>High:</strong> public bind accepted known default API keys - fixed by rejecting known defaults on non-loopback binds.</li>
+      <li><strong>High:</strong> compose profiles shipped predictable bearer defaults - fixed by requiring supplied keys and neutral examples.</li>
+    </ul>
+    <h2>Validation</h2>
+    <p>Ruff, format check, scoped pyright, full pytest, and local Docker health proof passed. No unresolved high or critical findings remain in reviewed Jarvis scope.</p>
+  </body>
+</html>

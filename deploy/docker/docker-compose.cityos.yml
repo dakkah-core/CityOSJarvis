@@ -26,7 +26,7 @@ services:
       - CITYOSJARVIS_LLM_MODE=${CITYOSJARVIS_LLM_MODE:-gateway}
       - CITYOSJARVIS_LLM_MODEL=${CITYOSJARVIS_LLM_MODEL:-gpt-4o-mini}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-http://litellm:4000}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-litellm-cityos-local}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
       - ENABLE_TTS=${ENABLE_TTS:-true}
       - CARTESIA_API_KEY=${CARTESIA_API_KEY}
       - LOKI_URL=${LOKI_URL:-http://loki:3100}

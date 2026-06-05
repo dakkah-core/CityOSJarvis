@@ -60,6 +60,27 @@ class TestAgentManagerRoutes:
         assert data["name"] == "researcher"
         assert data["status"] == "idle"
 
+    def test_create_agent_rejects_dangerous_tools_by_default(self, client):
+        resp = client.post(
+            "/v1/managed-agents",
+            json={
+                "name": "unsafe",
+                "config": {"tools": ["calculator", "shell_exec"]},
+            },
+        )
+        assert resp.status_code == 400
+        assert "shell_exec" in resp.json()["detail"]
+
+    def test_update_agent_rejects_dangerous_tools_by_default(self, client):
+        create_resp = client.post("/v1/managed-agents", json={"name": "safe"})
+        agent_id = create_resp.json()["id"]
+        resp = client.patch(
+            f"/v1/managed-agents/{agent_id}",
+            json={"config": {"tools": "calculator,code_interpreter"}},
+        )
+        assert resp.status_code == 400
+        assert "code_interpreter" in resp.json()["detail"]
+
     def test_get_agent(self, client):
         create_resp = client.post("/v1/managed-agents", json={"name": "test"})
         agent_id = create_resp.json()["id"]

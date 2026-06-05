@@ -56,6 +56,8 @@ def test_launchd_plist_binds_loopback():
         ("localhost", "", False),
         ("0.0.0.0", "oj_sk_x", False),
         ("0.0.0.0", "", True),
+        ("0.0.0.0", "cityos-local-key", True),
+        ("0.0.0.0", "staging-key", True),
         ("192.168.1.10", "", True),
     ],
 )

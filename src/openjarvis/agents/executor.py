@@ -257,6 +257,27 @@ class AgentExecutor:
             raise FatalError(f"Unknown agent type: {agent_type}")
 
         config = agent.get("config", {})
+        if self._system is not None:
+            try:
+                from openjarvis.security.managed_tools import (
+                    managed_agent_dangerous_tools_allowed,
+                    sanitize_managed_agent_tools,
+                )
+
+                config, blocked_tools = sanitize_managed_agent_tools(
+                    config,
+                    allow_dangerous_tools=managed_agent_dangerous_tools_allowed(
+                        getattr(self._system, "config", None)
+                    ),
+                )
+                if blocked_tools:
+                    logger.warning(
+                        "Agent %s: blocked dangerous managed tools: %s",
+                        agent["id"],
+                        ", ".join(blocked_tools),
+                    )
+            except Exception:
+                pass
 
         # Resolve engine + model from JarvisSystem
         engine = self._system.engine if self._system else None

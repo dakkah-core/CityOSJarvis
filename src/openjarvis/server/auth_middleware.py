@@ -17,6 +17,14 @@ PUBLIC_READONLY_API_PATHS = {
     "/v1/savings",
 }
 
+UNSAFE_PUBLIC_BIND_API_KEYS = {
+    "cityos-local-key",
+    "staging-key",
+    "changeme",
+    "password",
+    "test",
+}
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Validates ``Authorization: Bearer <key>`` on ``/v1/*`` and ``/api/*`` routes.
@@ -59,10 +67,10 @@ def generate_api_key() -> str:
 
 
 def check_bind_safety(host: str, *, api_key: str) -> None:
-    """Refuse to bind non-loopback without an API key.
+    """Refuse to bind non-loopback without a non-default API key.
 
     Raises ``SystemExit`` if *host* is not a loopback address and
-    *api_key* is empty.
+    *api_key* is empty or a known development default.
     """
     import ipaddress
     import sys
@@ -72,9 +80,11 @@ def check_bind_safety(host: str, *, api_key: str) -> None:
     except ValueError:
         is_loop = host in ("localhost", "")
 
-    if not is_loop and not api_key:
+    unsafe_key = api_key.strip() in UNSAFE_PUBLIC_BIND_API_KEYS
+    if not is_loop and (not api_key or unsafe_key):
         logger.error(
-            "Binding to %s requires OPENJARVIS_API_KEY to be set. "
+            "Binding to %s requires OPENJARVIS_API_KEY to be set to a "
+            "non-default value. "
             "Run: jarvis auth generate-key",
             host,
         )

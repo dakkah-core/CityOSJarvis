@@ -7,6 +7,10 @@ import re as _re
 from typing import Any, Dict, List, Optional, Tuple
 
 from openjarvis.agents.manager import AgentManager
+from openjarvis.security.managed_tools import (
+    blocked_managed_agent_tools,
+    managed_agent_dangerous_tools_allowed,
+)
 
 try:
     from fastapi import APIRouter, HTTPException, Request
@@ -67,6 +71,51 @@ _BROWSER_SUB_TOOLS = {
     "browser_extract",
     "browser_axtree",
 }
+
+
+def _requested_agent_config(
+    manager: AgentManager,
+    *,
+    template_id: str | None,
+    overrides: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    if not template_id:
+        return dict(overrides or {})
+
+    templates = manager.list_templates()
+    tpl = next((item for item in templates if item.get("id") == template_id), None)
+    if not tpl:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template not found: {template_id}",
+        )
+
+    skip = {"id", "name", "description", "source"}
+    config = {key: value for key, value in tpl.items() if key not in skip}
+    if overrides:
+        config.update(overrides)
+    return config
+
+
+def _ensure_managed_agent_tools_allowed(
+    request: Request,
+    agent_config: Dict[str, Any] | None,
+) -> None:
+    config = getattr(request.app.state, "config", None)
+    blocked = blocked_managed_agent_tools(
+        agent_config,
+        allow_dangerous_tools=managed_agent_dangerous_tools_allowed(config),
+    )
+    if blocked:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Managed-agent dangerous tools are disabled: "
+                f"{', '.join(blocked)}. Set "
+                "agent_manager.allow_dangerous_tools=true only for a trusted "
+                "local or isolated deployment."
+            ),
+        )
 
 
 def _resolve_memory_backend(config: Any) -> Any:
@@ -794,6 +843,21 @@ async def _stream_managed_agent(
 
     agent_id = agent_record["id"]
     config = agent_record.get("config", {})
+    server_config = (
+        getattr(app_state, "config", None) if app_state is not None else None
+    )
+    blocked_tools = blocked_managed_agent_tools(
+        config,
+        allow_dangerous_tools=managed_agent_dangerous_tools_allowed(server_config),
+    )
+    if blocked_tools:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Managed-agent dangerous tools are disabled: "
+                f"{', '.join(blocked_tools)}."
+            ),
+        )
     # Resolve the model: prefer the agent's own config, then the server's
     # resolved model (app.state.model — what the engine was booted with),
     # and only then the legacy engine._model attr. OllamaEngine takes the
@@ -1498,6 +1562,13 @@ def create_agent_manager_router(
 
     @agents_router.post("")
     async def create_agent(req: CreateAgentRequest, request: Request):
+        requested_config = _requested_agent_config(
+            manager,
+            template_id=req.template_id,
+            overrides=req.config,
+        )
+        _ensure_managed_agent_tools_allowed(request, requested_config)
+
         if req.template_id:
             agent = manager.create_from_template(
                 req.template_id, req.name, overrides=req.config
@@ -1523,7 +1594,7 @@ def create_agent_manager_router(
         return agent
 
     @agents_router.patch("/{agent_id}")
-    async def update_agent(agent_id: str, req: UpdateAgentRequest):
+    async def update_agent(agent_id: str, req: UpdateAgentRequest, request: Request):
         if not manager.get_agent(agent_id):
             raise HTTPException(status_code=404, detail="Agent not found")
         kwargs: Dict[str, Any] = {}
@@ -1532,6 +1603,7 @@ def create_agent_manager_router(
         if req.agent_type is not None:
             kwargs["agent_type"] = req.agent_type
         if req.config is not None:
+            _ensure_managed_agent_tools_allowed(request, req.config)
             kwargs["config"] = req.config
         return manager.update_agent(agent_id, **kwargs)
 
@@ -2110,7 +2182,17 @@ def create_agent_manager_router(
         return {"templates": AgentManager.list_templates()}
 
     @templates_router.post("/{template_id}/instantiate")
-    async def instantiate_template(template_id: str, req: CreateAgentRequest):
+    async def instantiate_template(
+        template_id: str,
+        req: CreateAgentRequest,
+        request: Request,
+    ):
+        requested_config = _requested_agent_config(
+            manager,
+            template_id=template_id,
+            overrides=req.config,
+        )
+        _ensure_managed_agent_tools_allowed(request, requested_config)
         return manager.create_from_template(template_id, req.name, overrides=req.config)
 
     # ── Global agent endpoints ───────────────────────────────

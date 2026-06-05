@@ -24,7 +24,7 @@ services:
     ports:
       - "${PORT_CITYOSJARVIS:-8010}:8000"
     environment:
-      OPENJARVIS_API_KEY: ${OPENJARVIS_API_KEY:-cityos-local-key}
+      OPENJARVIS_API_KEY: ${OPENJARVIS_API_KEY:?OPENJARVIS_API_KEY must be set}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-cityos}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-cityosjarvis}
@@ -46,7 +46,7 @@ services:
       AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-cityos-local}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
     volumes:
       - cityosjarvis-audit:/var/log/cityosjarvis
     depends_on:
@@ -77,7 +77,7 @@ services:
       AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-cityos-local}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
     command:
       - --config
       - /app/config.yaml

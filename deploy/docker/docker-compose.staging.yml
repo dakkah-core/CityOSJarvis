@@ -20,7 +20,7 @@ services:
     ports:
       - "18000:8000"
     environment:
-      - OPENJARVIS_API_KEY=staging-key
+      - OPENJARVIS_API_KEY=${OPENJARVIS_API_KEY:?OPENJARVIS_API_KEY must be set}
       - CITYOS_AUDIT_DIR=/var/log/cityosjarvis
       - CITYOS_LOG_LEVEL=INFO
       - ENABLE_TTS=true

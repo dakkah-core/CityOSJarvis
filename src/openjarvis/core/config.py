@@ -1418,6 +1418,7 @@ class AgentManagerConfig:
 
     enabled: bool = True
     db_path: str = str(DEFAULT_CONFIG_DIR / "agents.db")
+    allow_dangerous_tools: bool = False
 
 
 @dataclass(slots=True)

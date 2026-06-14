@@ -11,7 +11,11 @@ from typing import Any, Dict, List, Optional
 
 from openjarvis.core.events import EventType, get_event_bus
 from openjarvis.core.registry import MemoryRegistry
-from openjarvis.tools.storage._stubs import MemoryBackend, RetrievalResult
+from openjarvis.tools.storage._stubs import (
+    MemoryBackend,
+    MemoryBackendUnavailable,
+    RetrievalResult,
+)
 
 
 def _check_fts5(conn: sqlite3.Connection) -> bool:

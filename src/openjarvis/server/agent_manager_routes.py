@@ -160,24 +160,35 @@ def _make_lightweight_system(
     model: str,
     config: Any = None,
 ) -> _LightweightSystem:
-    """Build a minimal system with a plain OllamaEngine.
+    """Build a minimal system with a fresh inference engine.
 
     The server's ``app.state.engine`` is heavily wrapped
     (MultiEngine -> InstrumentedEngine -> GuardrailsEngine) and can
-    return empty content from background threads.  Create a fresh
-    OllamaEngine directly (no health checks or model discovery that
-    could interfere with in-flight Ollama requests).
+    return empty content from background threads. Create a fresh
+    engine directly (no health checks or model discovery that
+    could interfere with in-flight requests).
     """
     try:
-        from openjarvis.engine.ollama import OllamaEngine
+        from openjarvis.engine._discovery import get_engine
 
         cfg = config
         if cfg is None:
             from openjarvis.core.config import load_config
 
             cfg = load_config()
-        host = cfg.engine.ollama.host if cfg else ""
-        plain_engine = OllamaEngine(host=host) if host else OllamaEngine()
+
+        pref = cfg.intelligence.preferred_engine
+        key = pref or cfg.engine.default
+        resolved = get_engine(cfg, key)
+
+        if resolved is not None:
+            plain_engine = resolved[1]
+        else:
+            from openjarvis.engine.ollama import OllamaEngine
+
+            host = cfg.engine.ollama.host if cfg else ""
+            plain_engine = OllamaEngine(host=host) if host else OllamaEngine()
+
         # Wrap with InstrumentedEngine so agent ticks are recorded
         # in telemetry (FLOPs, energy, cost savings).
         try:
@@ -488,6 +499,26 @@ _SAMPLER_PARAM_KEYS = (
 )
 
 
+def _build_managed_system_prompt(system_prompt: str, app_config: Any) -> str:
+    """Build the streaming managed-agent system prompt via SystemPromptBuilder.
+
+    Routes the agent's own ``system_prompt`` through the same builder the
+    CLI/ask path uses, so SOUL.md / MEMORY.md / USER.md persona files are
+    injected for streaming chat too (#431). Returns the assembled prompt
+    (caller decides whether to append a SYSTEM message); an agent with
+    neither persona nor template yields an empty string, preserving the
+    prior no-SYSTEM-message behavior.
+    """
+    from openjarvis.prompt.builder import SystemPromptBuilder
+
+    builder = SystemPromptBuilder(
+        agent_template=system_prompt or "",
+        memory_files_config=getattr(app_config, "memory_files", None),
+        system_prompt_config=getattr(app_config, "system_prompt", None),
+    )
+    return builder.build()
+
+
 def _sampler_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
     """Extract per-agent sampler params from a managed agent's config (#386)."""
     out: Dict[str, Any] = {}
@@ -716,12 +747,14 @@ def _get_mcp_tools(app_state: Any) -> Tuple[List[Dict[str, Any]], Dict[str, Any]
         cfg = _json.loads(server_cfg) if isinstance(server_cfg, str) else server_cfg
         name = cfg.get("name", "<unnamed>")
         url = cfg.get("url")
+        # Bearer token from config — mirrors the builder.py fix for #461.
+        token = cfg.get("token")
         command = cfg.get("command", "")
         args = cfg.get("args", [])
 
         try:
             if url:
-                transport = StreamableHTTPTransport(url=url)
+                transport = StreamableHTTPTransport(url=url, token=token)
             elif command:
                 transport = StdioTransport(command=[command] + args)
             else:
@@ -875,8 +908,21 @@ async def _stream_managed_agent(
 
     # Build conversation messages from history + current input
     llm_messages: List[Message] = []
-    if system_prompt:
-        llm_messages.append(Message(role=Role.SYSTEM, content=system_prompt))
+
+    # Wire the SystemPromptBuilder to inject SOUL.md / MEMORY.md / USER.md
+    # persona files (parity with the CLI/ask path) — see #431.
+    app_config = getattr(app_state, "config", None)
+    if app_config is None:
+        from openjarvis.core.config import load_config
+
+        app_config = load_config()
+
+    final_system_prompt = _build_managed_system_prompt(system_prompt or "", app_config)
+
+    if final_system_prompt and final_system_prompt.strip():
+        llm_messages.append(
+            Message(role=Role.SYSTEM, content=final_system_prompt.strip())
+        )
 
     # Resolve agent type and class for DeepResearch tool wiring
     agent_type = agent_record.get("agent_type", "")

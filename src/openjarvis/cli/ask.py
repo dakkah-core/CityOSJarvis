@@ -324,6 +324,7 @@ def _run_agent(
     temperature: float,
     max_tokens: int,
     capability_policy=None,
+    memory_files_config=None,
 ):
     """Instantiate and run an agent, returning the AgentResult."""
     # Import agents to trigger registration
@@ -338,13 +339,35 @@ def _run_agent(
 
     agent_cls = AgentRegistry.get(agent_name)
 
-    # Build tools
+    # Build tools — local registry tools + MCP server tools from config
+    # (#461 — MCP tools were silently dropped because ask.py only used
+    # ToolRegistry).
     tools = []
     if tool_names:
         # Trigger tool registration
         import openjarvis.tools  # noqa: F401
 
         tools = _build_tools(tool_names, config, engine, model_name)
+
+    # MCP tools from config.tools.mcp.servers. Loaded regardless of
+    # tool_names — if the caller passed --tools, the loader filters MCP
+    # tools to those names; otherwise every MCP tool is included.
+    from openjarvis.mcp.loader import load_mcp_tools_from_config
+
+    mcp_tools, mcp_clients = load_mcp_tools_from_config(
+        config.tools.mcp,
+        allowed_names=set(tool_names) if tool_names else None,
+    )
+    if mcp_tools:
+        # Dedup against registry tools by spec.name — first occurrence wins
+        # so a registry tool always takes precedence over an MCP tool with
+        # the same name (avoids the "two tools with the same name" footgun
+        # the verdict flagged).
+        existing = {t.spec.name for t in tools}
+        for t in mcp_tools:
+            if t.spec.name not in existing:
+                tools.append(t)
+                existing.add(t.spec.name)
 
     # Build agent with appropriate kwargs
     agent_kwargs = {
@@ -372,11 +395,17 @@ def _run_agent(
 
         agent_kwargs["prompt_builder"] = SystemPromptBuilder(
             agent_template=config.agent.default_system_prompt or "",
-            memory_files_config=config.memory_files,
+            memory_files_config=memory_files_config or config.memory_files,
             system_prompt_config=config.system_prompt,
         )
 
     agent = agent_cls(engine, model_name, **agent_kwargs)
+    # Hold MCP transports alive for the agent's lifetime — without this
+    # reference they'd be garbage-collected when this function returns
+    # and the underlying HTTP connections would close mid-execution (#461
+    # adversarial review caught this).
+    if mcp_clients:
+        agent._mcp_clients = mcp_clients
     ctx = AgentContext()
 
     # Inject memory context into conversation if available
@@ -590,6 +619,15 @@ def _print_profile(
         "(default: ~/.openjarvis/knowledge.db)."
     ),
 )
+@click.option(
+    "--persona",
+    "persona_name",
+    default=None,
+    help=(
+        "Named persona dir under ~/.openjarvis/personas/<name>/ "
+        "(overrides config). Pass 'none' to disable all persona files."
+    ),
+)
 @click.pass_context
 def ask(
     ctx: click.Context,
@@ -606,6 +644,7 @@ def ask(
     enable_profile: bool,
     research_mode: bool,
     knowledge_db: str | None,
+    persona_name: str | None,
 ) -> None:
     """Ask Jarvis a question."""
     quiet = (ctx.obj or {}).get("quiet", False) or output_json
@@ -617,6 +656,15 @@ def ask(
 
     # Load config
     config = load_config()
+
+    # Resolve effective MemoryFilesConfig with --persona override
+    import dataclasses as _dc
+
+    effective_mf = (
+        _dc.replace(config.memory_files, persona_name=persona_name)
+        if persona_name is not None
+        else config.memory_files
+    )
 
     # Honor `agent.default_agent` from config when --agent was not explicitly
     # passed. Pass `--agent ""` to opt out and use direct-to-engine mode.
@@ -666,7 +714,13 @@ def ask(
     register_builtin_models()
 
     effective_engine_key = engine_key or config.intelligence.preferred_engine or None
-    resolved = get_engine(config, effective_engine_key)
+    # Pass the model we intend to run so engine selection can skip an engine
+    # that can't actually serve it (e.g. the cloud fallback when the local
+    # engine is down but only a non-OpenAI key is set — see #532). This is the
+    # -m flag or the configured default; when neither is set we leave it None
+    # and a model is chosen per-engine below.
+    selection_model = model_name or config.intelligence.default_model or None
+    resolved = get_engine(config, effective_engine_key, model=selection_model)
     if resolved is None:
         console.print(
             "[red bold]No inference engine available.[/red bold]\n\n"
@@ -771,6 +825,7 @@ def ask(
                 temperature,
                 max_tokens,
                 capability_policy=sec.capability_policy,
+                memory_files_config=effective_mf,
             )
         except EngineConnectionError as exc:
             console.print(f"[red]Engine error:[/red] {exc}")

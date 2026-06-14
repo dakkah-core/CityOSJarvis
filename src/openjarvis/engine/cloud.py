@@ -137,6 +137,25 @@ def _is_openai_reasoning_model(model: str) -> bool:
     return m == "gpt-5-mini" or m.startswith("gpt-5-mini-")
 
 
+def _is_unsupported_temperature_error(exc: Exception) -> bool:
+    """True if an OpenAI 400 says the model rejects a non-default temperature.
+
+    Some models (e.g. gpt-5) only accept the default temperature and return
+    ``code: unsupported_value`` for ``param: temperature`` (see #426). We
+    can't enumerate every such model up front, so detect the error and retry
+    without temperature — mirroring the tools-400 retry in the local engines.
+    """
+    message = str(exc).lower()
+    if "temperature" not in message:
+        return False
+    return (
+        "unsupported_value" in message
+        or "unsupported value" in message
+        or "only the default" in message
+        or "does not support" in message
+    )
+
+
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Estimate USD cost based on the hardcoded pricing table."""
     # Try exact match first, then prefix match
@@ -528,7 +547,19 @@ class CloudEngine(InferenceEngine):
                 create_kwargs["response_format"] = response_format
 
         t0 = time.monotonic()
-        resp = self._openai_client.chat.completions.create(**create_kwargs)
+        try:
+            resp = self._openai_client.chat.completions.create(**create_kwargs)
+        except Exception as exc:
+            # Some models reject a non-default temperature with a 400
+            # unsupported_value (see #426). Retry once without it rather
+            # than failing the user's first prompt.
+            if "temperature" in create_kwargs and _is_unsupported_temperature_error(
+                exc
+            ):
+                create_kwargs.pop("temperature", None)
+                resp = self._openai_client.chat.completions.create(**create_kwargs)
+            else:
+                raise
         elapsed = time.monotonic() - t0
         choice = resp.choices[0]
         usage = resp.usage
@@ -863,6 +894,13 @@ class CloudEngine(InferenceEngine):
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        # Forward tools / tool_choice (OpenRouter is OpenAI-compatible).
+        tools = kwargs.pop("tools", None)
+        if tools:
+            create_kwargs["tools"] = tools
+        tool_choice = kwargs.pop("tool_choice", None)
+        if tool_choice is not None:
+            create_kwargs["tool_choice"] = tool_choice
         t0 = time.monotonic()
         resp = self._openrouter_client.chat.completions.create(**create_kwargs)
         elapsed = time.monotonic() - t0
@@ -870,7 +908,7 @@ class CloudEngine(InferenceEngine):
         usage = resp.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
-        return {
+        result: Dict[str, Any] = {
             "content": choice.message.content or "",
             "usage": {
                 "prompt_tokens": prompt_tokens,
@@ -881,6 +919,19 @@ class CloudEngine(InferenceEngine):
             "finish_reason": choice.finish_reason or "stop",
             "ttft": elapsed,
         }
+        if getattr(choice.message, "tool_calls", None):
+            result["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in choice.message.tool_calls
+            ]
+        return result
 
     def _generate_minimax(
         self,
@@ -1199,6 +1250,13 @@ class CloudEngine(InferenceEngine):
             "temperature": temperature,
             "stream": True,
         }
+        # Forward tools / tool_choice (OpenRouter is OpenAI-compatible).
+        tools = kwargs.pop("tools", None)
+        if tools:
+            create_kwargs["tools"] = tools
+        tool_choice = kwargs.pop("tool_choice", None)
+        if tool_choice is not None:
+            create_kwargs["tool_choice"] = tool_choice
         resp = self._openrouter_client.chat.completions.create(**create_kwargs)
         for chunk in resp:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -1453,6 +1511,34 @@ class CloudEngine(InferenceEngine):
         if self._codex_client is not None:
             models.extend(_CODEX_MODELS)
         return models
+
+    def _client_for_model(self, model: str) -> Any:
+        """Return the provider client ``generate``/``stream`` will dispatch to
+        for *model* (mirrors the routing in those methods)."""
+        if _is_codex_model(model):
+            return self._codex_client
+        if _is_openrouter_model(model):
+            return self._openrouter_client
+        if _is_minimax_model(model):
+            return self._minimax_client
+        if _is_anthropic_model(model):
+            return self._anthropic_client
+        if _is_google_model(model):
+            return self._google_client
+        return self._openai_client
+
+    def can_serve(self, model: str) -> bool:
+        """Return ``True`` only if the provider client for *model* exists.
+
+        ``health()`` is ``True`` whenever *any* provider client is configured,
+        but a request for, say, a ``gpt-*`` model still needs the OpenAI
+        client specifically. Without this check the cloud engine gets picked
+        as a fallback (when the local engine is down) for a model it can't
+        serve, then dies at call time with "<provider> client not available"
+        instead of the user getting a helpful "start your local engine"
+        message (see #532).
+        """
+        return self._client_for_model(model) is not None
 
     def health(self) -> bool:
         return (

@@ -15,6 +15,7 @@ pytest.importorskip("fastapi")  # agent_manager_routes imports FastAPI at module
 
 from openjarvis.core.types import Role  # noqa: E402
 from openjarvis.server.agent_manager_routes import (  # noqa: E402
+    _build_managed_system_prompt,
     _instantiate_managed_tool,
     _replay_history_messages,
     _sampler_kwargs,
@@ -171,3 +172,71 @@ class TestInstantiateManagedTool:
             _FakeTool, "calculator", engine=object(), model="m", app_state=app_state
         )
         assert tool.kwargs == {}
+
+
+class TestBuildManagedSystemPrompt:
+    """#431 — the streaming managed-agent path must run the agent's
+    system_prompt through SystemPromptBuilder so SOUL.md / MEMORY.md /
+    USER.md persona files are injected (parity with the CLI/ask path),
+    instead of using the raw config system_prompt verbatim.
+    """
+
+    def _config_with_soul(self, tmp_path):
+        from openjarvis.core.config import (
+            MemoryFilesConfig,
+            SystemPromptConfig,
+        )
+
+        soul = tmp_path / "SOUL.md"
+        soul.write_text("You are Jarvis, a meticulous local-first assistant.")
+        # Other persona files point at non-existent paths — only SOUL is set.
+        return SimpleNamespace(
+            memory_files=MemoryFilesConfig(soul_path=str(soul)),
+            system_prompt=SystemPromptConfig(),
+        )
+
+    def test_injects_soul_persona(self, tmp_path):
+        app_config = self._config_with_soul(tmp_path)
+        result = _build_managed_system_prompt(
+            system_prompt="You are a helpful assistant.",
+            app_config=app_config,
+        )
+        # The persona file content is injected (the #431 fix)...
+        assert "meticulous local-first assistant" in result
+        # ...alongside the agent's own template.
+        assert "You are a helpful assistant." in result
+
+    def test_agent_template_is_preserved(self, tmp_path):
+        from openjarvis.core.config import MemoryFilesConfig, SystemPromptConfig
+
+        # No persona files configured (all default paths).
+        app_config = SimpleNamespace(
+            memory_files=MemoryFilesConfig(),
+            system_prompt=SystemPromptConfig(),
+        )
+        result = _build_managed_system_prompt(
+            system_prompt="Plain agent.",
+            app_config=app_config,
+        )
+        # The agent's own template is carried into the assembled prompt.
+        assert "Plain agent." in result
+
+    def test_matches_cli_builder_output(self, tmp_path):
+        """Parity check: the helper produces exactly what a directly-
+        constructed SystemPromptBuilder produces (same path the CLI uses),
+        so streaming chat and `jarvis ask` assemble the prompt identically.
+        """
+        from openjarvis.core.config import MemoryFilesConfig, SystemPromptConfig
+        from openjarvis.prompt.builder import SystemPromptBuilder
+
+        app_config = SimpleNamespace(
+            memory_files=MemoryFilesConfig(),
+            system_prompt=SystemPromptConfig(),
+        )
+        helper_out = _build_managed_system_prompt("Agent X.", app_config)
+        direct_out = SystemPromptBuilder(
+            agent_template="Agent X.",
+            memory_files_config=app_config.memory_files,
+            system_prompt_config=app_config.system_prompt,
+        ).build()
+        assert helper_out == direct_out

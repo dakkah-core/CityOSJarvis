@@ -81,7 +81,8 @@ def check_ssrf(url: str) -> Optional[str]:
 
 
 def _check_ssrf_python(url: str) -> Optional[str]:
-    """Legacy Python SSRF check — kept for reference only."""
+    """Pure-Python SSRF check — fallback used when the Rust extension is
+    unavailable (e.g. an install without the compiled backend)."""
     from urllib.parse import urlparse
 
     parsed = urlparse(url)

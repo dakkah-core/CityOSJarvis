@@ -90,7 +90,17 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool) -> None:
     ):
         from openjarvis.cli._version_check import check_for_updates
 
-        check_for_updates(ctx.invoked_subcommand)
+        # Run the PyPI version poll off the hot path: on a cache miss it does
+        # a blocking urlopen (up to 3s) that otherwise delays every command,
+        # notably `jarvis serve` startup (#263). It's best-effort and never
+        # raises, and the nudge prints to stderr, so a daemon thread is safe —
+        # for long-lived commands (serve) it finishes; for short commands that
+        # exit first, the check is simply skipped this run (same as a miss).
+        threading.Thread(
+            target=check_for_updates,
+            args=(ctx.invoked_subcommand,),
+            daemon=True,
+        ).start()
 
     # First-run guard — routes bare `jarvis` to chat or init.
     if ctx.invoked_subcommand is None:
